@@ -4,12 +4,11 @@ from config import LatticeGeneration, GNN
 import tqdm
 from utils import *
 import torch.nn.functional as F
-
 import warnings
 warnings.filterwarnings('ignore')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+# device = torch.device("cpu")
 
 
 def train(lattice_graph, model, optimizer, criterion):
@@ -28,7 +27,26 @@ def test(lattice_graph, model):
     model.eval()
     with torch.no_grad():
         out = model(lattice_graph.x, lattice_graph.edge_index)
-    return out
+    ndcg = compute_ndcg(out, lattice_graph.y)
+    print(5*'=====')
+    print(f'NDCG: {ndcg}')
+    return
+
+
+def compute_dcg(ground_truth, sorted_indices, at_k=20):
+    DCG = 0
+    for i in range(1, min(at_k, len(sorted_indices)) + 1):
+        DCG += (ground_truth[sorted_indices[i-1]].item() / math.log2(i+1))
+    return DCG
+
+
+def compute_ndcg(ground_truth, predictions, at_k=20):
+    sorted_gt_indices = torch.argsort(ground_truth, descending=True)
+    sorted_pred_indices = torch.argsort(predictions, descending=True)
+    IDCG = compute_dcg(ground_truth, sorted_gt_indices, at_k)
+    DCG = compute_dcg(ground_truth, sorted_pred_indices, at_k)
+    return round(DCG / IDCG, 4)
+
 
 
 
@@ -62,9 +80,8 @@ if __name__ == "__main__":
         loss_val = train(lattice_graph, model, optimizer, criterion)
         print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
 
-    output = test(lattice_graph, model)
-    # save the output
-    output_path = lattice_path.replace('lattice', 'output')
+    test(lattice_graph, model)
+
 
 
 
