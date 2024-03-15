@@ -11,6 +11,7 @@ warnings.filterwarnings('ignore')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+
 def train(lattice_graph, model, optimizer, criterion):
     lattice_graph.to(device)
     model.train()
