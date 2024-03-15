@@ -1,14 +1,16 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv, GATConv
+from torch_geometric import seed_everything
 import torch_geometric
 from torch.nn import Linear
+
 
 
 class LatticeGraphSAGE(torch.nn.Module):
     def __init__(self, input_channels, hidden_channels, num_layers=3, p_dropout=0.2, seed=1):
         super(LatticeGraphSAGE, self).__init__()
-        torch.manual_seed(seed)
+        seed_everything(seed)
         self.num_layers = num_layers
         self.p_dropout = p_dropout
         self._set_layers(input_channels, hidden_channels)
@@ -31,9 +33,9 @@ class LatticeGraphSAGE(torch.nn.Module):
 
 
 class LatticeGAT(torch.nn.Module):
-    def __init__(self, input_channels, hidden_channels, num_layers=3, p_dropout=0.2, seed=1):
+    def __init__(self, input_channels, hidden_channels, num_layers=3, p_dropout=0.2, seed=2):
         super(LatticeGAT, self).__init__()
-        torch.manual_seed(seed)
+        seed_everything(seed)
         self.num_layers = num_layers
         self.p_dropout = p_dropout
         self._set_layers(input_channels, hidden_channels)
