@@ -1,3 +1,5 @@
+import math
+
 import torch
 from GNN_models import LatticeGNN
 from config import LatticeGeneration, GNN, Evaluation
@@ -27,8 +29,37 @@ def test(lattice_graph, model, at_k, comb_size, feature_num):
     model.eval()
     with torch.no_grad():
         out = model(lattice_graph.x, lattice_graph.edge_index)
-    compute_ndcg(lattice_graph.y, out, at_k, comb_size, feature_num)
+    results = compute_eval_metrics(lattice_graph.y, out, at_k, comb_size, feature_num)
+    print_results(results, at_k, comb_size)
+    save_results(results, at_k, comb_size)
     return
+
+
+def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
+    eval_metrics, eval_metric_func = get_eval_metric_func()
+    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
+    sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
+    sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
+    results = dict()
+    for metric in eval_metrics:
+        results[metric] = dict()
+        if metric not in eval_metric_func:
+            raise ValueError(f"Invalid evaluation metric: {metric}")
+        else:
+            if type(at_k) is not list:
+                at_k = [at_k]
+            for k in at_k:
+                results = eval_metric_func[metric](ground_truth, k, sorted_gt_indices, sorted_pred_indices, results)
+    return results
+
+
+def get_eval_metric_func():
+    # TODO: Consider adding more evaluation metrics
+    eval_metric_func = {
+        'ndcg': compute_ndcg,
+        'hits': compute_hits
+    }
+    return Evaluation.eval_metrics, eval_metric_func
 
 
 def get_comb_size_indices(num_nodes, comb_size, feature_num):
@@ -48,22 +79,33 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 def compute_dcg(ground_truth, sorted_indices, at_k):
     DCG = 0
     for i in range(1, at_k + 1):
-        DCG += (ground_truth[sorted_indices[i-1]].item() / math.log2(i+1))
+        DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
     return DCG
 
 
-def compute_ndcg(ground_truth, predictions, at_k, comb_size, feature_num):
-    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
-    sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
-    sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
-    if type(at_k) is not list:
-        at_k = [at_k]
-    for k in at_k:
-        IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
-        DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
-        print(f'NDCG@{k}: {round(DCG / IDCG, 4)}')
+def compute_ndcg(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+    IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
+    DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
+    results['ndcg'][k] = round(DCG / IDCG, 4)
+    return results
+
+def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+    hits = sum([1 for i in range(k) if sorted_pred_indices[i] in sorted_gt_indices[:k]])
+    results['hits'][k] = round(hits / k, 4)
+    return results
+
+def print_results(results, at_k, comb_size):
+    print(f'Evaluation results for comb_size={comb_size} and at_k={at_k}:\n')
+    for metric in results:
+        for k in at_k:
+            print(f'{metric}@{k}: {results[metric][k]}')
+        print(5*'-------------------')
     return
 
+
+def save_results(results, at_k, comb_size):
+    # TODO: Implement saving the results to a file
+    return
 
 if __name__ == "__main__":
     formula_idx = LatticeGeneration.formula_idx
