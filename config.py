@@ -9,13 +9,15 @@ class LatticeGeneration:
 
 
 class GNN:
-    gnn_model = 'SAGE'
+    gnn_model = 'GAT'
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 10
+    epochs = 200
+
 
 class Evaluation:
-    at_k = 20
+    at_k = [5, 10, 20, 50, 100]
+    comb_size = 3
 
 
