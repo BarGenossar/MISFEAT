@@ -20,4 +20,3 @@ class Evaluation:
     at_k = [5, 10, 20, 50, 100]
     comb_size = 3
 
-
