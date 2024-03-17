@@ -13,7 +13,7 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 400
+    epochs = 200
 
 
 class Evaluation:

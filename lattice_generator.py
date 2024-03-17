@@ -46,7 +46,6 @@ class FeatureLatticeGraph:
             new_tmp_dict = dict()
             mappings_dict[comb_size] = defaultdict(dict)
             feature_set_combs = list(combinations(dataframe.drop('y', axis=1).columns, comb_size))
-            # print(f"\nCreating the mappings for feature combinations of size {comb_size}...")
             for comb in tqdm.tqdm(feature_set_combs):
                 tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
                 mappings_dict = self._update_mappings_dict(mappings_dict, comb_size, comb, tmp_series, y_series)
@@ -58,15 +57,12 @@ class FeatureLatticeGraph:
         score = mutual_info_score(tmp_series, y_series)
         mappings_dict[comb_size][comb]['score'] = round(score, 4)
         mappings_dict[comb_size][comb]['binary_vector'] = binary_vec
-        # We shift by 1 since we use 0-indexed storage
+        #
         mappings_dict[comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
         return mappings_dict
 
     def _initialize_tmp_dict(self, mappings_dict, dataframe, y_series):
         prev_tmp_dict = dict()
-        # if self.min_k == 1:
-        #     feature_set_combs = [(feature) for feature in dataframe.drop('y', axis=1).columns]
-        # else:
         feature_set_combs = list(combinations(dataframe.drop('y', axis=1).columns, self.min_k))
         mappings_dict[self.min_k] = defaultdict(dict)
         for comb in feature_set_combs:
@@ -99,8 +95,6 @@ class FeatureLatticeGraph:
         return Data(x=x, edge_index=edge_index, y=y)
 
     def _get_homogeneous_node_features_and_labels(self):
-        # TODO: The current implementation supports only the case where self.min_k = 1 and self.max_k = feature_num.
-        #  Add support for other cases.
         nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
         x = torch.zeros(nodes_num, self.feature_num, dtype=torch.float)
         y = torch.zeros(nodes_num, dtype=torch.float)
@@ -160,7 +154,6 @@ class FeatureLatticeGraph:
         return None
 
     def save(self, dataset_path):
-        # save the lattice in the same directory as the dataset
         lattice_path = dataset_path.replace('.pkl', '_lattice.pt')
         torch.save(self.graph, lattice_path)
         print(f"The lattice was saved at {lattice_path}")

@@ -12,6 +12,7 @@ def convert_decimal_to_binary(decimal, feature_num):
 
 def convert_comb_to_binary(comb, feature_num):
     if type(comb) == str:
+        # A single feature tuple is actually a string
         idx = int(comb.split('_')[1])
         return convert_decimal_to_binary(2 ** idx, feature_num)
     binary = '0' * feature_num
