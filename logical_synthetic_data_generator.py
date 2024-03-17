@@ -8,11 +8,10 @@ from sklearn.metrics import mutual_info_score
 
 
 class LogicalDatasetGenerator:
-    def __init__(self, formula_name, configs_num, formula, hyperparams, seed=42, save=True):
-        np.random.seed(seed)
-        self.seed = seed
+    def __init__(self, formula_name, configs_num, formula, hyperparams):
+        np.random.seed(configs_num)
+        self.seed = configs_num
         self.name = formula_name
-        self.configs = configs_num
         self.feature_num = hyperparams['feature_num']
         self.formula = formula
         self.hyperparams = hyperparams
@@ -65,8 +64,8 @@ class LogicalDatasetGenerator:
         dataset = self._get_correlated_vals(dataset, sample_size)
         dataset = self._get_redundant_vals(dataset, sample_size)
         dataset = self._get_noisy_vals(dataset, sample_size)
+        dataset = self._add_random_noise(dataset, sample_size)
         df = pd.DataFrame(dataset)
-        # change the order of the columns
         return df[[f'x_{i}' for i in range(self.feature_num)] + ['y']]
 
     def compute(self, data, formula):
@@ -103,6 +102,15 @@ class LogicalDatasetGenerator:
     def _get_noisy_vals(self, dataset, sample_size):
         for feature in self.noisy_features:
             dataset[feature] = np.random.randint(0, 2, sample_size)
+        return dataset
+
+    def _add_random_noise(self, dataset, sample_size):
+        random_noise_param = self.hyperparams['random_noise']
+        feature_list = [f'x_{i}' for i in range(self.feature_num)]
+        for feature in feature_list:
+            # Define noise_flip_prob
+            dataset[feature] = np.where(np.random.rand(sample_size) > noise_flip_prob,
+                                        dataset[feature], 1 - dataset[feature])
         return dataset
 
     def create_description(self):

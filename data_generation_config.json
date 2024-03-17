@@ -30,12 +30,13 @@
             "feature_num": 10,
             "redundant_num": 2,
             "correlated_num": 2,
-            "correlated_min_probability": 0.8,
-            "correlated_max_probability": 0.9,
+            "correlated_min_probability": 0.65,
+            "correlated_max_probability": 0.75,
             "redundant_min_subgroup": 2,
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
-            "sample_size": 5000
+            "sample_size": 5000,
+            "random_noise": 0.05
         },
         "2": {
             "feature_num": 12,
@@ -46,7 +47,8 @@
             "redundant_min_subgroup": 2,
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
-            "sample_size": 5000
+            "sample_size": 5000,
+            "random_noise": 0.05
         },
         "3": {
             "feature_num": 15,
@@ -57,7 +59,8 @@
             "redundant_min_subgroup": 2,
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
-            "sample_size": 5000
+            "sample_size": 5000,
+            "random_noise": 0.05
         }
     }
 }
