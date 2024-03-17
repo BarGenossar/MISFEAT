@@ -45,7 +45,7 @@ class FeatureLatticeGraph:
         for comb_size in range(self.min_k + 1, self.max_k + 1):
             new_tmp_dict = dict()
             mappings_dict[comb_size] = defaultdict(dict)
-            feature_set_combs = list(combinations(dataframe.drop('y', axis=1).columns, comb_size))
+            feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
             for comb in tqdm.tqdm(feature_set_combs):
                 tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
                 mappings_dict = self._update_mappings_dict(mappings_dict, comb_size, comb, tmp_series, y_series)
@@ -63,7 +63,7 @@ class FeatureLatticeGraph:
 
     def _initialize_tmp_dict(self, mappings_dict, dataframe, y_series):
         prev_tmp_dict = dict()
-        feature_set_combs = list(combinations(dataframe.drop('y', axis=1).columns, self.min_k))
+        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_k))
         mappings_dict[self.min_k] = defaultdict(dict)
         for comb in feature_set_combs:
             tmp_series = dataframe[comb[0]]

@@ -27,6 +27,7 @@
     },
     "hyperparams": {
         "1": {
+            "subgroups_num": 4,
             "feature_num": 10,
             "redundant_num": 2,
             "correlated_num": 2,
@@ -36,9 +37,11 @@
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
             "sample_size": 5000,
-            "random_noise": 0.05
+            "random_noise_mean": 0.05,
+            "random_noise_std": 0.02
         },
         "2": {
+            "subgroups_num": 4,
             "feature_num": 12,
             "redundant_num": 3,
             "correlated_num": 3,
@@ -48,9 +51,11 @@
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
             "sample_size": 5000,
-            "random_noise": 0.05
+            "random_noise_mean": 0.1,
+            "random_noise_std": 0.04
         },
         "3": {
+            "subgroups_num": 3,
             "feature_num": 15,
             "redundant_num": 6,
             "correlated_num": 3,
@@ -60,7 +65,8 @@
             "redundant_max_subgroup": 4,
             "redundant_flip_probability": 0.25,
             "sample_size": 5000,
-            "random_noise": 0.05
+            "random_noise_mean": 0.08,
+            "random_noise_std": 0.03
         }
     }
 }
