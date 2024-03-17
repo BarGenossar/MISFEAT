@@ -8,10 +8,11 @@ from sklearn.metrics import mutual_info_score
 
 
 class LogicalDatasetGenerator:
-    def __init__(self, formula_name, configs_num, formula, hyperparams):
-        np.random.seed(configs_num)
-        self.seed = configs_num
+    def __init__(self, formula_name, config_num, formula, hyperparams):
+        np.random.seed(int(config_num))
+        self.seed = int(config_num)
         self.name = formula_name
+        self.subgroups_num = hyperparams['subgroups_num']
         self.feature_num = hyperparams['feature_num']
         self.formula = formula
         self.hyperparams = hyperparams
@@ -22,7 +23,6 @@ class LogicalDatasetGenerator:
         self.correlated_features = self._get_correlated_features()
         self.noisy_features = self.feature_pool
         self.dataset = self.generate_values()
-        self.save()
 
     def _get_relevant_features(self):
         relevant_features = [expr for expr in self.formula.split(' ') if expr not in self.operation_pool]
@@ -57,18 +57,29 @@ class LogicalDatasetGenerator:
 
     def generate_values(self):
         sample_size = self.hyperparams['sample_size']
-        dataset = dict()
+        tmp_dataset = dict()
         for feature in self.relevant_features:
-            dataset[feature] = np.random.randint(0, 2, sample_size)
-        dataset['y'] = self.compute(dataset, self.formula)
-        dataset = self._get_correlated_vals(dataset, sample_size)
-        dataset = self._get_redundant_vals(dataset, sample_size)
-        dataset = self._get_noisy_vals(dataset, sample_size)
-        dataset = self._add_random_noise(dataset, sample_size)
-        df = pd.DataFrame(dataset)
-        return df[[f'x_{i}' for i in range(self.feature_num)] + ['y']]
+            tmp_dataset[feature] = np.random.randint(0, 2, sample_size)
+        tmp_dataset['y'] = self._compute_by_formula(tmp_dataset, self.formula)
+        tmp_dataset = self._modify_by_features(tmp_dataset, sample_size)
+        df = self._generate_dataframe(tmp_dataset)
+        return df
 
-    def compute(self, data, formula):
+    def _modify_by_features(self, tmp_dataset, sample_size):
+        tmp_dataset = self._get_correlated_vals(tmp_dataset, sample_size)
+        tmp_dataset = self._get_redundant_vals(tmp_dataset, sample_size)
+        tmp_dataset = self._get_noisy_vals(tmp_dataset, sample_size)
+        # tmp_dataset = self._add_random_noise(tmp_dataset, sample_size)
+        return tmp_dataset
+
+    def _generate_dataframe(self, tmp_dataset):
+        df = pd.DataFrame(tmp_dataset)
+        df = df[[f'x_{i}' for i in range(self.feature_num)] + ['y']]
+        df['subgroup'] = np.random.randint(0, self.subgroups_num, len(df))
+        df = self._add_random_noise(df)
+        return df
+
+    def _compute_by_formula(self, data, formula):
         expressions = formula.split(' ')
         op_dict = {'and': np.logical_and, 'or': np.logical_or, 'xor': np.logical_xor, 'not': np.logical_not}
         clause_results = []
@@ -94,7 +105,7 @@ class LogicalDatasetGenerator:
     def _get_redundant_vals(self, dataset, sample_size):
         redundant_flip_prob = self.hyperparams['redundant_flip_probability']
         for feature in self.redundant_features:
-            computed_vals = self.compute(dataset, self.redundant_features[feature])
+            computed_vals = self._compute_by_formula(dataset, self.redundant_features[feature])
             dataset[feature] = np.where(np.random.rand(sample_size) > redundant_flip_prob,
                                         computed_vals, 1 - computed_vals)
         return dataset
@@ -104,14 +115,18 @@ class LogicalDatasetGenerator:
             dataset[feature] = np.random.randint(0, 2, sample_size)
         return dataset
 
-    def _add_random_noise(self, dataset, sample_size):
-        random_noise_param = self.hyperparams['random_noise']
+    def _add_random_noise(self, df):
+        random_noise_mean = self.hyperparams['random_noise_mean']
+        random_noise_std = self.hyperparams['random_noise_std']
         feature_list = [f'x_{i}' for i in range(self.feature_num)]
-        for feature in feature_list:
-            # Define noise_flip_prob
-            dataset[feature] = np.where(np.random.rand(sample_size) > noise_flip_prob,
-                                        dataset[feature], 1 - dataset[feature])
-        return dataset
+        for subgroup in range(self.subgroups_num):
+            tmp_df = df[df['subgroup'] == subgroup].copy()
+            for feature in feature_list:
+                noise_flip_prob = np.random.normal(random_noise_mean, random_noise_std)
+                tmp_df[feature] = np.where(np.random.rand(len(tmp_df)) > noise_flip_prob,
+                                           tmp_df[feature], 1 - tmp_df[feature])
+            df.loc[tmp_df.index] = tmp_df
+        return df
 
     def create_description(self):
         description = """"""
@@ -139,7 +154,7 @@ class LogicalDatasetGenerator:
     def save(self):
         if not self.save:
             return
-        path = f'GeneratedData/Formula{self.name}/Config{self.configs}'
+        path = f'GeneratedData/Formula{self.name}/Config{self.seed}'
         if not os.path.exists(path):
             os.makedirs(path)
         pickle.dump(self.dataset, open(f'{path}/dataset.pkl', 'wb'))
@@ -150,7 +165,8 @@ class LogicalDatasetGenerator:
 if __name__ == '__main__':
     configs = json.load(open('data_generation_config.json'))
     for formula in configs['formulas']:
-        for hyperparam in configs['hyperparams']:
-            dataset = LogicalDatasetGenerator(formula, hyperparam, configs['formulas'][formula]['formula'],
-                                              configs['hyperparams'][hyperparam]).dataset
+        for config_num in configs['hyperparams']:
+            dataset = LogicalDatasetGenerator(formula, config_num, configs['formulas'][formula]['formula'],
+                                              configs['hyperparams'][config_num])
+            dataset.save()
 
