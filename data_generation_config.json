@@ -56,7 +56,7 @@
         },
         "3": {
             "subgroups_num": 3,
-            "feature_num": 15,
+            "feature_num": 14,
             "redundant_num": 6,
             "correlated_num": 3,
             "correlated_min_probability": 0.6,

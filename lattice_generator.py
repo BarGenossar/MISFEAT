@@ -1,6 +1,6 @@
 import torch
 import torch_geometric
-from torch_geometric.data import Data, DataLoader
+from torch_geometric.data import Data, HeteroData
 from itertools import combinations
 import pandas as pd
 from collections import defaultdict
@@ -13,17 +13,15 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, feature_num, min_k=1,
-                 within_level_edges=True, is_hetero=False, with_edge_attrs=False):
+    def __init__(self, dataset_path, feature_num, min_k=1, with_edge_attrs=False):
         self.min_k = min_k
         self.max_k = feature_num  # Consider to modify it
         self.feature_num = feature_num
-        self.within_level_edges = within_level_edges
-        self.is_hetero = is_hetero
         self.with_edge_attrs = with_edge_attrs
         self.dataset = self._read_dataset(dataset_path)
+        self.subgroups_num = self.dataset['subgroup'].nunique()
         self.mappings_dict = self._create_mappings_dict()
-        self.graph = self._create_feature_lattice()
+        self.graph = self._create_multiple_feature_lattice()
         self.save(dataset_path)
 
     @staticmethod
@@ -37,40 +35,47 @@ class FeatureLatticeGraph:
         2. The binary vector representation of the feature combination
         3. The node ID of the feature combination
         """
-        print(f"Generating the mappings dictionary...")
+        print(f"Generating the mappings dictionary...\n =====================================\n")
         dataframe = self.dataset.astype(str)
         mappings_dict = defaultdict(dict)
         y_series = dataframe['y'].copy()
-        mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(mappings_dict, dataframe, y_series)
-        for comb_size in range(self.min_k + 1, self.max_k + 1):
-            new_tmp_dict = dict()
-            mappings_dict[comb_size] = defaultdict(dict)
-            feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
-            for comb in tqdm.tqdm(feature_set_combs):
-                tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
-                mappings_dict = self._update_mappings_dict(mappings_dict, comb_size, comb, tmp_series, y_series)
-            prev_tmp_dict = new_tmp_dict.copy()
-        return mappings_dict
-    
-    def _update_mappings_dict(self, mappings_dict, comb_size, comb, tmp_series, y_series):
-        binary_vec = convert_comb_to_binary(comb, self.feature_num)
-        score = mutual_info_score(tmp_series, y_series)
-        mappings_dict[comb_size][comb]['score'] = round(score, 4)
-        mappings_dict[comb_size][comb]['binary_vector'] = binary_vec
-        #
-        mappings_dict[comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
+        for g_id in range(self.subgroups_num):
+            print(f"Generating the mappings dictionary for subgroup {g_id}:\n")
+            mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, mappings_dict, dataframe, y_series)
+            for comb_size in range(self.min_k + 1, self.max_k + 1):
+                mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
+                                                                                    dataframe, y_series, prev_tmp_dict)
+
         return mappings_dict
 
-    def _initialize_tmp_dict(self, mappings_dict, dataframe, y_series):
+    def _create_comb_size_mappings_dict(self, g_id, mappings_dict, comb_size, dataframe, y_series, prev_tmp_dict):
+        new_tmp_dict = dict()
+        mappings_dict[g_id][comb_size] = defaultdict(dict)
+        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
+        for comb in tqdm.tqdm(feature_set_combs):
+            tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
+            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, comb_size, comb, tmp_series, y_series)
+        prev_tmp_dict = new_tmp_dict.copy()
+        return mappings_dict, prev_tmp_dict
+
+    def _update_mappings_dict(self, g_id, mappings_dict, comb_size, comb, tmp_series, y_series):
+        binary_vec = convert_comb_to_binary(comb, self.feature_num)
+        score = mutual_info_score(tmp_series, y_series)
+        mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
+        mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
+        mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
+        return mappings_dict
+
+    def _initialize_tmp_dict(self, g_id, mappings_dict, dataframe, y_series):
         prev_tmp_dict = dict()
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_k))
-        mappings_dict[self.min_k] = defaultdict(dict)
+        mappings_dict[g_id][self.min_k] = defaultdict(dict)
         for comb in feature_set_combs:
             tmp_series = dataframe[comb[0]]
             for i in range(1, len(comb)):
                 tmp_series = tmp_series + dataframe[comb[i]]
             prev_tmp_dict[comb] = tmp_series.copy()
-            mappings_dict = self._update_mappings_dict(mappings_dict, self.min_k, comb, tmp_series, y_series)
+            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, self.min_k, comb, tmp_series, y_series)
         return mappings_dict, prev_tmp_dict
 
     @staticmethod
@@ -79,79 +84,88 @@ class FeatureLatticeGraph:
         new_tmp_dict[feature_set] = tmp_series.copy()
         return tmp_series, new_tmp_dict
 
-    def _create_feature_lattice(self):
+    def _create_multiple_feature_lattice(self):
         print(f"\nCreating the feature lattice...")
-        if self.is_hetero:
-            return self._create_hetero_lattice()
-        else:
-            return self._create_homogeneous_lattice()
+        data = HeteroData()
+        data = self._get_node_features_and_labels(data)
+        data = self._get_edge_index(data)
+        data = self._get_edge_attrs(data)
+        return data
 
-    def _create_homogeneous_lattice(self):
-        x, y = self._get_homogeneous_node_features_and_labels()
-        edge_index = self._get_homogeneous_edge_index()
-        edge_attrs = self._get_homogeneous_edge_attrs()
-        #TODO: Add support for edge features
-        # make the data object undireced
-        return Data(x=x, edge_index=edge_index, y=y)
+    def _get_node_features_and_labels(self, data):
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
+        for g_id in range(self.subgroups_num):
+            x_tensor = torch.zeros(lattice_nodes_num, self.feature_num, dtype=torch.float)
+            y_tensor = torch.zeros(lattice_nodes_num, dtype=torch.float)
+            for comb_size in range(self.min_k, self.max_k + 1):
+                for comb in self.mappings_dict[g_id][comb_size].keys():
+                    node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                    x_tensor[node_id] = torch.tensor([int(digit) for digit in
+                                                      self.mappings_dict[g_id][comb_size][comb]['binary_vector']])
+                    y_tensor[node_id] = self.mappings_dict[g_id][comb_size][comb]['score']
+            data[f"g{g_id}"].x = x_tensor
+            data[f"g{g_id}"].y = y_tensor
+        return data
 
-    def _get_homogeneous_node_features_and_labels(self):
-        nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
-        x = torch.zeros(nodes_num, self.feature_num, dtype=torch.float)
-        y = torch.zeros(nodes_num, dtype=torch.float)
-        for comb_size in range(self.min_k, self.max_k + 1):
-            for comb in self.mappings_dict[comb_size].keys():
-                node_id = self.mappings_dict[comb_size][comb]['node_id']
-                x[node_id] = torch.tensor([int(digit) for digit in
-                                           self.mappings_dict[comb_size][comb]['binary_vector']])
-                y[node_id] = self.mappings_dict[comb_size][comb]['score']
-        return x, y
-
-    def _get_homogeneous_edge_index(self):
+    def _get_edge_index(self, data):
         # TODO: Optimize this function. The current implementation is not efficient.
-        # edges_num = get_lattice_edges_num(self.feature_num, self.min_k, self.max_k, self.within_level_edges)
-        edge_index = self._get_homogeneous_inter_level_edges()
-        edge_index = self._get_homogeneous_intra_level_edges(edge_index)
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t()
-        return edge_index
+        # edges_num = get_lattice_edges_num(self.feature_num, self.min_k, self.max_k)
+        data = self._get_intra_lattice_edges(data)
+        data = self._get_inter_lattice_edges(data)
+        return data
 
-    def _get_homogeneous_inter_level_edges(self):
-        edge_index = []
-        for comb_size in range(self.min_k, self.max_k):
-            for comb in self.mappings_dict[comb_size]:
-                node_id = self.mappings_dict[comb_size][comb]['node_id']
-                for next_comb in self.mappings_dict[comb_size + 1]:
-                    if set(comb).issubset(set(next_comb)):
-                        next_node_id = self.mappings_dict[comb_size + 1][next_comb]['node_id']
-                        edge_index.append([node_id, next_node_id])
-                        edge_index.append([next_node_id, node_id])
-        return edge_index
+    def _get_intra_lattice_edges(self, data):
+        data = self._get_inter_level_edges(data)
+        data = self._get_intra_level_edges(data)
+        return data
 
-    def _get_homogeneous_intra_level_edges(self, edge_index):
-        edge_set = set()
-        if self.within_level_edges:
+    def _get_inter_level_edges(self, data):
+        for g_id in range(self.subgroups_num):
+            edge_index = []
+            for comb_size in range(self.min_k, self.max_k):
+                for comb in self.mappings_dict[g_id][comb_size]:
+                    node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                    for next_comb in self.mappings_dict[g_id][comb_size + 1]:
+                        if set(comb).issubset(set(next_comb)):
+                            next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
+                            edge_index.append([node_id, next_node_id])
+                            edge_index.append([next_node_id, node_id])
+            data[f"g{g_id}", f"g{id}_to_g{id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+        return data
+
+    def _get_intra_level_edges(self, data):
+        for g_id in range(self.subgroups_num):
+            edge_set = set()
+            edge_index = []
             for comb_size in range(max(2, self.min_k), self.max_k + 1):
-                for comb in self.mappings_dict[comb_size]:
-                    node_id = self.mappings_dict[comb_size][comb]['node_id']
-                    for next_comb in self.mappings_dict[comb_size]:
+                for comb in self.mappings_dict[g_id][comb_size]:
+                    node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                    for next_comb in self.mappings_dict[g_id][comb_size]:
                         # Check if the overlapping between the two combinations is at size comb_size - 1
                         if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
                             if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
                                 edge_set.add((comb, next_comb))
-                                next_node_id = self.mappings_dict[comb_size][next_comb]['node_id']
+                                next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
                                 edge_index.append([node_id, next_node_id])
                                 edge_index.append([next_node_id, node_id])
-        return edge_index
+            data[f"g{g_id}", f"g{id}_to_g{id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+        return data
 
-    def _get_homogeneous_edge_attrs(self):
+    def _get_inter_lattice_edges(self, data):
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
+        edge_index = [[node_id, node_id] for node_id in range(lattice_nodes_num)]
+        for g_id in range(self.subgroups_num):
+            for next_g_id in range(g_id + 1, self.subgroups_num):
+                data[f"g{g_id}", f"g{id}_to_g{next_g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+                data[f"g{next_g_id}", f"g{id}_to_g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+        return data
+
+    def _get_edge_attrs(self, data):
         if self.with_edge_attrs:
             # TODO: Implement this method
             pass
         else:
-            return None
-
-    def _create_hetero_lattice(self):
-        # TODO: Implement this method
-        return None
+            return data
 
     def save(self, dataset_path):
         lattice_path = dataset_path.replace('.pkl', '_lattice.pt')
