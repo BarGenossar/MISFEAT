@@ -21,6 +21,7 @@ class LatticeGNN(torch.nn.Module):
         if gnn_model == 'SAGE':
             return SAGEConv
         elif gnn_model == 'GAT':
+            # Can't use GAT for heterogeneous graphs
             return GATConv
         else:
             raise ValueError(f"Invalid GNN model: {gnn_model}")
