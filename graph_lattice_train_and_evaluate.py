@@ -1,10 +1,10 @@
 import math
-
 import torch
 from GNN_models import LatticeGNN
 from config import LatticeGeneration, GNN, Evaluation
 import tqdm
 from utils import *
+from torch_geometric.nn import to_hetero
 import torch.nn.functional as F
 import warnings
 warnings.filterwarnings('ignore')
@@ -13,25 +13,27 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 
 
-def train(lattice_graph, model, optimizer, criterion):
+def train(lattice_graph, model, g_id, optimizer, criterion):
     lattice_graph.to(device)
     model.train()
     optimizer.zero_grad()
-    mask = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
-    out = model(lattice_graph.x, lattice_graph.edge_index)
-    #loss = criterion(out, lattice_graph.y)
-    loss = criterion(out[mask], lattice_graph.y[mask])
+    out = model(lattice_graph.x_dict, lattice_graph.edge_index_dict)
+    labels = lattice_graph[g_id].y
+    predictions = out[g_id]
+    loss = criterion(predictions, labels)
     loss.backward()
     optimizer.step()
     return loss.item()
 
 
-def test(lattice_graph, model, at_k, comb_size, feature_num):
+def test(lattice_graph, model, g_id, at_k, comb_size, feature_num):
     lattice_graph.to(device)
     model.eval()
     with torch.no_grad():
-        out = model(lattice_graph.x, lattice_graph.edge_index)
-    results = compute_eval_metrics(lattice_graph.y, out, at_k, comb_size, feature_num)
+        out = model(lattice_graph.x_dict, lattice_graph.edge_index_dict)
+    labels = lattice_graph[g_id].y
+    predictions = out[g_id]
+    results = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
     print_results(results, at_k, comb_size)
     save_results(results, at_k, comb_size)
     return
@@ -126,25 +128,26 @@ if __name__ == "__main__":
     at_k = Evaluation.at_k
     comb_size = Evaluation.comb_size
 
+
+
     dataset_path = f"GeneratedData/Formula{formula_idx}/Config{hyperparams_idx}/dataset.pkl"
-    lattice_path = f"GeneratedData/Formula{formula_idx}/Config{hyperparams_idx}/dataset_lattice.pt"
+    lattice_path = f"GeneratedData/Formula{formula_idx}/Config{hyperparams_idx}/dataset_hetero_graph.pt"
     feature_num = read_feature_num_from_txt(dataset_path)
 
     lattice_graph = torch.load(lattice_path)
     model = LatticeGNN(gnn_model, feature_num, hidden_channels, num_layers, p_dropout)
+    model = to_hetero(model, lattice_graph.metadata())
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     criterion = torch.nn.MSELoss()
 
-    for epoch in range(1, epochs + 1):
-        loss_val = train(lattice_graph, model, optimizer, criterion)
-        print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
-    print(5*'====================')
-    test(lattice_graph, model, at_k, comb_size, feature_num)
+    subgroups = lattice_graph.x_dict.keys()
 
-
-
-
-
-
-
+    for subgroup in subgroups:
+        print(f"\nTraining on subgroup {subgroup}...")
+        for epoch in range(1, epochs + 1):
+            loss_val = train(lattice_graph, model, subgroup, optimizer, criterion)
+            print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
+        print(5*'====================')
+        print("Results:")
+        test(lattice_graph, model, subgroup, at_k, comb_size, feature_num)

@@ -9,7 +9,7 @@ class LatticeGeneration:
 
 
 class GNN:
-    gnn_model = 'GAT'
+    gnn_model = 'SAGE'  # Can't use GAT for heterogeneous graphs. Use only SAGE for now
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0

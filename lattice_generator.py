@@ -130,8 +130,16 @@ class FeatureLatticeGraph:
                             next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
                             edge_index.append([node_id, next_node_id])
                             edge_index.append([next_node_id, node_id])
-            data[f"g{g_id}", f"g{id}_to_g{id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+            edge_name = self._get_edge_name(g_id, g_id)
+            data[f"g{g_id}", edge_name, f"g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         return data
+
+    @staticmethod
+    def _get_edge_name(g_id1, g_id2):
+        g_str1 = ''.join(('g', str(g_id1)))
+        g_str2 = ''.join(('g', str(g_id2)))
+        return ''.join((g_str1, 'TO', g_str2))
+
 
     def _get_intra_level_edges(self, data):
         for g_id in range(self.subgroups_num):
@@ -148,16 +156,19 @@ class FeatureLatticeGraph:
                                 next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
                                 edge_index.append([node_id, next_node_id])
                                 edge_index.append([next_node_id, node_id])
-            data[f"g{g_id}", f"g{id}_to_g{id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+            edge_name = self._get_edge_name(g_id, g_id)
+            data[f"g{g_id}", edge_name, f"g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         return data
 
     def _get_inter_lattice_edges(self, data):
         lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
         edge_index = [[node_id, node_id] for node_id in range(lattice_nodes_num)]
-        for g_id in range(self.subgroups_num):
-            for next_g_id in range(g_id + 1, self.subgroups_num):
-                data[f"g{g_id}", f"g{id}_to_g{next_g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
-                data[f"g{next_g_id}", f"g{id}_to_g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+        for g_id1 in range(self.subgroups_num):
+            for g_id2 in range(g_id1 + 1, self.subgroups_num):
+                edge_name1 = self._get_edge_name(g_id1, g_id2)
+                edge_name2 = self._get_edge_name(g_id2, g_id1)
+                data[f"g{g_id1}", edge_name1, f"g{g_id2}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+                data[f"g{g_id2}", edge_name2, f"g{g_id1}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         return data
 
     def _get_edge_attrs(self, data):
@@ -168,16 +179,16 @@ class FeatureLatticeGraph:
             return data
 
     def save(self, dataset_path):
-        lattice_path = dataset_path.replace('.pkl', '_lattice.pt')
-        torch.save(self.graph, lattice_path)
-        print(f"The lattice was saved at {lattice_path}")
+        graph_path = dataset_path.replace('.pkl', '_hetero_graph.pt')
+        torch.save(self.graph, graph_path)
+        print(f"The lattice graph was saved at {graph_path}")
         return
 
-    def __len__(self):
-        return 1
-
-    def __getitem__(self, idx):
-        return self.graph
+    # def __len__(self):
+    #     return 1
+    #
+    # def __getitem__(self, idx):
+    #     return self.graph
 
 
 if __name__ == "__main__":
