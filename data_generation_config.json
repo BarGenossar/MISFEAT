@@ -1,5 +1,9 @@
 {
     "formulas": {
+        "0": {
+            "name": "Formula_0",
+            "formula": "( x_1 + x_2 ) - ( x_3 + x_4 )"
+        },
         "1": {
             "name": "Formula_1",
             "formula": "x_1 and x_2 or x_3 xor x_7"
@@ -29,6 +33,7 @@
         "1": {
             "subgroups_num": 4,
             "feature_num": 10,
+            "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
             "correlated_num": 2,
             "correlated_min_probability": 0.65,
@@ -43,6 +48,7 @@
         "2": {
             "subgroups_num": 4,
             "feature_num": 12,
+            "feature_range": [0, 1, 2, 3, 4, 5],
             "redundant_num": 3,
             "correlated_num": 3,
             "correlated_min_probability": 0.6,
@@ -57,6 +63,7 @@
         "3": {
             "subgroups_num": 3,
             "feature_num": 14,
+            "feature_range": [0, 1, 2, 3, 4, 5, 6],
             "redundant_num": 6,
             "correlated_num": 3,
             "correlated_min_probability": 0.6,
