@@ -113,10 +113,10 @@ def retrieve_results(results, at_k, comb_size, subgroup):
     return description
 
 
-def save_results(path, info, train_data, test_data, epochs, loss_vals):
+def save_results(path, info, train_data, test_data, epochs, loss_vals, seed):
     if not os.path.exists(path):
         os.makedirs(path)
-    file_loc = path + '/results.txt'
+    file_loc = path + f'/results_seed{seed}.txt'
     with open(file_loc, 'w') as file:
         file.write(info)
         file.write(train_data)
@@ -127,7 +127,8 @@ def save_results(path, info, train_data, test_data, epochs, loss_vals):
     plt.ylabel('Loss')
     plt.title('Training Loss')
     plt.legend()
-    plt.savefig(path + '/training_loss.png')
+    plt.savefig(path + f'/training_loss_seed{seed}.png')
+    plt.close()
 
 
 if __name__ == "__main__":
@@ -150,26 +151,28 @@ if __name__ == "__main__":
     parser.add_argument('--display', type=bool, default=False)
     args = parser.parse_args()
 
-    torch.manual_seed(args.seed)
     dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
     lattice_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
-    hyperparams = (f"{args.model}_seed{args.seed}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
+    hyperparams = (f"{args.model}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
                    f"{args.p_dropout}_lr{args.lr}_weight_decay{args.weight_decay}")
     file_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/{hyperparams}/"
 
     feature_num = read_feature_num_from_txt(dataset_path)
 
     lattice_graph = torch.load(lattice_path)
-    model = LatticeGNN(args.model, feature_num, args.hidden_channels, args.num_layers, args.p_dropout)
-    model = to_hetero(model, lattice_graph.metadata())
-    model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    criterion = torch.nn.MSELoss()
+    for seed in (0, 42, 100):  # Testing different seeds for robustness
+        torch.manual_seed(seed)
+        model = LatticeGNN(args.model, feature_num, args.hidden_channels, args.num_layers, args.p_dropout)
+        model = to_hetero(model, lattice_graph.metadata())
+        model.to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        criterion = torch.nn.MSELoss()
 
-    info_string = f"""
+        info_string = f"""
 Training using a GNN of the model {args.model}
 ===================================
 Hyperparameters:
+    Seed: {seed}
     Hidden channels: {args.hidden_channels}
     Number of layers: {args.num_layers}
     Dropout probability: {args.p_dropout}
@@ -181,28 +184,28 @@ Evaluation:
     @k: {args.at_k}
     Lattice level: {args.comb_size}
 ===================================
-    """
-    if args.display:
-        print(info_string)
+        """
+        if args.display:
+            print(info_string)
 
-    subgroups = lattice_graph.x_dict.keys()
-    train_string = ""
-    test_string = ""
+        subgroups = lattice_graph.x_dict.keys()
+        train_string = ""
+        test_string = ""
 
-    loss_vals = {subgroup: [] for subgroup in subgroups}
-    for subgroup in subgroups:
-        train_string += f"\nTraining on subgroup {subgroup}...\n"
-        for epoch in range(1, args.epochs + 1):
-            loss_val = train(lattice_graph, model, subgroup, optimizer, criterion)
-            loss_vals[subgroup].append(loss_val)
-            if epoch == 1 or epoch % 5 == 0:
-                train_string += f'Epoch: {epoch}, Loss: {round(loss_val, 4)}' + '\n'
+        loss_vals = {subgroup: [] for subgroup in subgroups}
+        for subgroup in subgroups:
+            train_string += f"\nTraining on subgroup {subgroup}...\n"
+            for epoch in range(1, args.epochs + 1):
+                loss_val = train(lattice_graph, model, subgroup, optimizer, criterion)
+                loss_vals[subgroup].append(loss_val)
+                if epoch == 1 or epoch % 5 == 0:
+                    train_string += f'Epoch: {epoch}, Loss: {round(loss_val, 4)}' + '\n'
 
-        train_string += 5*'-------------------' + '\n'
-        test_string += test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
+            train_string += 5*'-------------------' + '\n'
+            test_string += test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
 
-    if args.display:
-        print(train_string)
-        print(test_string)
+        if args.display:
+            print(train_string)
+            print(test_string)
 
-    save_results(file_path, info_string, train_string, test_string, args.epochs, loss_vals)
+        save_results(file_path, info_string, train_string, test_string, args.epochs, loss_vals, seed)
