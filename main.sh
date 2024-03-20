@@ -1,11 +1,8 @@
 #!/bin/zsh
 
-#formulas=(1 2 3 4 5 6);
-#configs=(1 2 3);
-#hidden=(32 64 128);
-formulas=(1);
-configs=(1);
-hidden=(32);
+formulas=(1 2 3 4 5 6);
+configs=(1 2 3);
+hidden=(32 64 128);
 
 if [ -z "$1" ]; then
   K=4
