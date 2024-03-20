@@ -130,7 +130,6 @@ class LogicalDatasetGenerator:
 
         clause_results = []
         for clause in reverse_polish:
-            print(clause)
             if clause not in self.OPERATIONS:
                 clause_results.append(dataset[clause])
             else:
@@ -142,7 +141,6 @@ class LogicalDatasetGenerator:
                 else:
                     result = op_func(clause1_result, clause2_result)
                 clause_results.append(result)
-            print(clause_results)
         return clause_results[0].astype(int)
 
     def _get_correlated_vals(self, dataset, sample_size):
@@ -213,12 +211,13 @@ class LogicalDatasetGenerator:
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
+    parser.add_argument('--formula', type=str, default='1', help='Index of the formula to be generated')
+    parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
+    args = parser.parse_args()
+
     configs = json.load(open('data_generation_config.json'))
-    for formula_idx in configs['formulas']:
-        for config in configs['hyperparams']:
-            data = LogicalDatasetGenerator(formula_idx, config, configs['formulas'][formula_idx]['formula'],
-                                           configs['hyperparams'][config])
-            print(data.infix_to_postfix(data.formula))
-            data.save()
-            break
-        break
+    data = LogicalDatasetGenerator(args.formula, args.config, configs['formulas'][args.formula]['formula'],
+                                   configs['hyperparams'][args.config])
+    data.save()
