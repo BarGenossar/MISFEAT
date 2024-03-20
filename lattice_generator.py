@@ -192,18 +192,26 @@ class FeatureLatticeGraph:
 
 
 if __name__ == "__main__":
-    formula_idx = LatticeGeneration.formula_idx
-    hyperparams_idx = LatticeGeneration.hyperparams_idx
-    min_k = LatticeGeneration.min_k
-    within_level_edges = LatticeGeneration.within_level_edges
-    is_hetero = LatticeGeneration.is_hetero
-    with_edge_attrs = LatticeGeneration.with_edge_attrs
+    import argparse
 
-    dataset_path = f"GeneratedData/Formula{formula_idx}/Config{hyperparams_idx}/dataset.pkl"
+    parser = argparse.ArgumentParser(description='Feature Lattice Graph Generation')
+    parser.add_argument('--formula', type=str, default=LatticeGeneration.formula_idx, help='index of the formula')
+    parser.add_argument('--config', type=str, default=LatticeGeneration.hyperparams_idx, help='index of configuration')
+    parser.add_argument('--min_k', type=int, default=LatticeGeneration.min_k, help='min size of feature combinations')
+    parser.add_argument('--within_level', type=bool, default=LatticeGeneration.within_level_edges,
+                        help='add edges within the same level')
+    # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
+    parser.add_argument('--edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
+                        help='add attributes to the edges')
+    args = parser.parse_args()
+
+    # formula_idx = LatticeGeneration.formula_idx
+    # hyperparams_idx = LatticeGeneration.hyperparams_idx
+    # min_k = LatticeGeneration.min_k
+    # within_level_edges = LatticeGeneration.within_level_edges
+    # is_hetero = LatticeGeneration.is_hetero
+    # with_edge_attrs = LatticeGeneration.with_edge_attrs
+
+    dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
     feature_num = read_feature_num_from_txt(dataset_path)
     lattice = FeatureLatticeGraph(dataset_path, feature_num)
-
-
-
-
-

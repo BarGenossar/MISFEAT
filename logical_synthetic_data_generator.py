@@ -127,7 +127,6 @@ class LogicalDatasetGenerator:
 
     def _compute_by_formula(self, dataset, formula):
         reverse_polish = self.infix_to_postfix(formula)
-
         clause_results = []
         for clause in reverse_polish:
             if clause not in self.OPERATIONS:
@@ -136,7 +135,7 @@ class LogicalDatasetGenerator:
                 op_func = self.OP_DICT[clause]
                 clause2_result = clause_results.pop()
                 clause1_result = clause_results.pop()
-                if clause in '+-*/^%':
+                if clause in '+-*^':
                     result = np.mod(op_func(clause1_result, clause2_result), len(self.feature_range))
                 else:
                     result = op_func(clause1_result, clause2_result)
