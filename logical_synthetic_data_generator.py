@@ -6,10 +6,6 @@ import pandas as pd
 
 
 class LogicalDatasetGenerator:
-    OP_DICT = {'and': np.bitwise_and, 'or': np.bitwise_or, 'xor': np.bitwise_xor, '+': np.add, '-': np.subtract,
-               '*': np.multiply, '^': np.power}
-    OPERATIONS = list(OP_DICT.keys())
-
     def __init__(self, formula_name, config_num, formula, hyperparams):
         np.random.seed(int(config_num))
         self.seed = int(config_num)
@@ -20,18 +16,25 @@ class LogicalDatasetGenerator:
         self.formula = formula
         self.hyperparams = hyperparams
         self.feature_pool = [f'x_{i}' for i in range(self.feature_num)]
+        self.operator_dict = self._get_operator_dict()
         self.relevant_features = self._get_relevant_features()
         self.redundant_features = self._get_redundant_features()
         self.correlated_features = self._get_correlated_features()
         self.noisy_features = self.feature_pool
         self.dataset = self.generate_values()
 
+    @staticmethod
+    def _get_operator_dict():
+        op_dict = {'and': np.bitwise_and, 'or': np.bitwise_or, 'xor': np.bitwise_xor, '+': np.add, 
+                   '-': np.subtract, '*': np.multiply, '^': np.power}
+        return op_dict
+
     def _get_relevant_features(self):
         """
         Extracts the relevant features from the formula and removes them from the feature pool.
         """
-        relevant_features = [expr for expr in self.formula.split(' ') if expr not in self.OPERATIONS and expr not
-                             in ['(', ')']]
+        relevant_features = [expr for expr in self.formula.split(' ') if expr not in self.operator_dict.keys() 
+                             and expr not in ['(', ')']]
         self.feature_pool = [f for f in self.feature_pool if f not in relevant_features]
         return relevant_features
 
@@ -52,11 +55,11 @@ class LogicalDatasetGenerator:
         min_subset_size = self.hyperparams['redundant_min_subgroup']
         max_subset_size = self.hyperparams['redundant_max_subgroup']
         expressions = {}
-
+        operation_list = list(self.operator_dict.keys())
         for f in redundant_features:
             subset_size = np.random.randint(min_subset_size, max_subset_size + 1)
             subset = np.random.choice(self.relevant_features, subset_size)
-            operations = np.random.choice(self.OPERATIONS, subset_size - 1)
+            operations = np.random.choice(operation_list, subset_size - 1)
             interlacing_string = ' '.join([f'{subset[i]} {operations[i]}'
                                            for i in range(subset_size - 1)]) + f' {subset[-1]}'
             expressions[f] = interlacing_string
@@ -93,7 +96,6 @@ class LogicalDatasetGenerator:
         tmp_dataset = self._get_correlated_vals(tmp_dataset, sample_size)
         tmp_dataset = self._get_redundant_vals(tmp_dataset, sample_size)
         tmp_dataset = self._get_noisy_vals(tmp_dataset, sample_size)
-        # tmp_dataset = self._add_random_noise(tmp_dataset, sample_size)
         return tmp_dataset
 
     def _generate_dataframe(self, tmp_dataset):
@@ -109,7 +111,7 @@ class LogicalDatasetGenerator:
         operators = []
         formula = expression.split(' ')
         for token in formula:
-            if token not in self.OPERATIONS and token not in '()':
+            if token not in self.operator_dict.keys() and token not in '()':
                 output.append(token)
             elif token == '(':
                 operators.append(token)
@@ -129,10 +131,10 @@ class LogicalDatasetGenerator:
         reverse_polish = self.infix_to_postfix(formula)
         clause_results = []
         for clause in reverse_polish:
-            if clause not in self.OPERATIONS:
+            if clause not in self.operator_dict.keys():
                 clause_results.append(dataset[clause])
             else:
-                op_func = self.OP_DICT[clause]
+                op_func = self.operator_dict[clause]
                 clause2_result = clause_results.pop()
                 clause1_result = clause_results.pop()
                 if clause in '+-*^':
@@ -212,7 +214,7 @@ class LogicalDatasetGenerator:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
-    parser.add_argument('--formula', type=str, default='1', help='Index of the formula to be generated')
+    parser.add_argument('--formula', type=str, default='0', help='Index of the formula to be generated')
     parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
     args = parser.parse_args()
 

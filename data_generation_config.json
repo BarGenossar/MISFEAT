@@ -1,8 +1,9 @@
+
 {
     "formulas": {
         "0": {
             "name": "Formula_0",
-            "formula": "( x_1 + x_2 ) - ( x_3 + x_4 )"
+            "formula": "( x_1 + x_2 ) + ( x_3 + x_4 )"
         },
         "1": {
             "name": "Formula_1",
@@ -31,7 +32,7 @@
     },
     "hyperparams": {
         "1": {
-            "subgroups_num": 4,
+            "subgroups_num": 3,
             "feature_num": 10,
             "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
