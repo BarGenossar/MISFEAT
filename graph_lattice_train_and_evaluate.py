@@ -1,20 +1,15 @@
-import math
 import os
-
 import torch
 from matplotlib import pyplot as plt
-
+import pickle
+import argparse
 from GNN_models import LatticeGNN
 from config import LatticeGeneration, GNN, Evaluation
-import tqdm
 from utils import *
 from torch_geometric.nn import to_hetero
-import torch.nn.functional as F
 import warnings
 warnings.filterwarnings('ignore')
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
 
 
 def train(lattice_graph, model, g_id, optimizer, criterion):
@@ -38,7 +33,8 @@ def test(lattice_graph, model, g_id, at_k, comb_size, feature_num):
     labels = lattice_graph[g_id].y
     predictions = out[g_id]
     results = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
-    return retrieve_results(results, at_k, comb_size, g_id)
+    print_results(results, at_k, comb_size, g_id)
+    return results
 
 
 def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
@@ -79,9 +75,7 @@ def get_comb_size_indices(num_nodes, comb_size, feature_num):
 
 def get_sorted_indices(score_tensor, comb_size_indices):
     sorted_indices = torch.argsort(score_tensor, descending=True)
-
-    x = [idx.item() for idx in sorted_indices if idx.item() in comb_size_indices]
-    return x
+    return [idx.item() for idx in sorted_indices if idx.item() in comb_size_indices]
 
 
 def compute_dcg(ground_truth, sorted_indices, at_k):
@@ -104,38 +98,30 @@ def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, result
     return results
 
 
-def retrieve_results(results, at_k, comb_size, subgroup):
-    description = f'Evaluation results for subgroup {subgroup} with comb_size={comb_size} and at_k={at_k}:\n'
+def print_results(results, at_k, comb_size, subgroup):
+    print(5 * '======================')
+    print(f'Evaluation results for subgroup {subgroup} with comb_size={comb_size} and at_k={at_k}:')
     for metric in results:
         for k in at_k:
-            description += f'{metric}@{k}: {results[metric][k]}\n'
-        description += 5*'-------------------' + '\n'
-    return description
+            print(f'{metric}@{k}: {results[metric][k]}')
+        print(5*'-------------------')
+    return
 
 
-def save_results(path, info, train_data, test_data, epochs, loss_vals, seed):
-    if not os.path.exists(path):
-        os.makedirs(path)
-    file_loc = path + f'/results_seed{seed}.txt'
-    with open(file_loc, 'w') as file:
-        file.write(info)
-        file.write(train_data)
-        file.write(test_data)
-    for subgroup in loss_vals:
-        plt.semilogy(range(1, epochs + 1), loss_vals[subgroup], label=subgroup)
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.title('Training Loss')
-    plt.legend()
-    plt.savefig(path + f'/training_loss_seed{seed}.png')
-    plt.close()
+def save_results(test_results, dir_path, seed):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    results_path = dir_path + f'results_seed{seed}.pkl'
+    with open(results_path, 'wb') as f:
+        pickle.dump(test_results, f)
+    return
+
+
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--seeds_num', type=int, default=3)
     parser.add_argument('--formula', type=str, default=str(LatticeGeneration.formula_idx))
     parser.add_argument('--config', type=str, default=str(LatticeGeneration.hyperparams_idx))
     parser.add_argument('--model', type=str, default=GNN.gnn_model)
@@ -148,64 +134,29 @@ if __name__ == "__main__":
     parser.add_argument('--comb_size', type=int, default=Evaluation.comb_size)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
-    parser.add_argument('--display', type=bool, default=False)
+    parser.add_argument('--display', type=bool, default=True)
     args = parser.parse_args()
 
-    dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-    lattice_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
-    hyperparams = (f"{args.model}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
-                   f"{args.p_dropout}_lr{args.lr}_weight_decay{args.weight_decay}")
-    file_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/{hyperparams}/"
-
+    dataset_path, graph_path, dir_path = read_paths(args)
     feature_num = read_feature_num_from_txt(dataset_path)
 
-    lattice_graph = torch.load(lattice_path)
-    for seed in (0, 42, 100):  # Testing different seeds for robustness
+    lattice_graph = torch.load(graph_path)
+    for seed in range(1, args.seeds_num + 1):
+        info_string = generate_info_string(args, seed)
         torch.manual_seed(seed)
         model = LatticeGNN(args.model, feature_num, args.hidden_channels, args.num_layers, args.p_dropout)
         model = to_hetero(model, lattice_graph.metadata())
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         criterion = torch.nn.MSELoss()
-
-        info_string = f"""
-Training using a GNN of the model {args.model}
-===================================
-Hyperparameters:
-    Seed: {seed}
-    Hidden channels: {args.hidden_channels}
-    Number of layers: {args.num_layers}
-    Dropout probability: {args.p_dropout}
-    Learning rate: {args.lr}
-    Weight decay: {args.weight_decay}
------------------------------------
-Evaluation:
-    Metrics: {Evaluation.eval_metrics}
-    @k: {args.at_k}
-    Lattice level: {args.comb_size}
-===================================
-        """
-        if args.display:
-            print(info_string)
-
         subgroups = lattice_graph.x_dict.keys()
-        train_string = ""
-        test_string = ""
-
         loss_vals = {subgroup: [] for subgroup in subgroups}
         for subgroup in subgroups:
-            train_string += f"\nTraining on subgroup {subgroup}...\n"
+            print(f"\nTraining on subgroup {subgroup}...")
             for epoch in range(1, args.epochs + 1):
                 loss_val = train(lattice_graph, model, subgroup, optimizer, criterion)
                 loss_vals[subgroup].append(loss_val)
                 if epoch == 1 or epoch % 5 == 0:
-                    train_string += f'Epoch: {epoch}, Loss: {round(loss_val, 4)}' + '\n'
-
-            train_string += 5*'-------------------' + '\n'
-            test_string += test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
-
-        if args.display:
-            print(train_string)
-            print(test_string)
-
-        save_results(file_path, info_string, train_string, test_string, args.epochs, loss_vals, seed)
+                    print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
+            test_results = test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
+        save_results(test_results, dir_path, seed)

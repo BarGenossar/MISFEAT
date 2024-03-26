@@ -49,28 +49,28 @@ def read_paths(args):
     graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
     hyperparams = (f"{args.model}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
                    f"{args.p_dropout}_lr{args.lr}_weight_decay{args.weight_decay}")
-    file_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/{hyperparams}/"
-    return dataset_path, graph_path, file_path
+    dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/{hyperparams}/"
+    return dataset_path, graph_path, dir_path
 
 
 def generate_info_string(args, seed):
     info_string = f"""
-                    Training using a GNN of the model {args.model}
-                    ===================================
-                    Hyperparameters:
-                        Seed: {seed}
-                        Hidden channels: {args.hidden_channels}
-                        Number of layers: {args.num_layers}
-                        Dropout probability: {args.p_dropout}
-                        Learning rate: {args.lr}
-                        Weight decay: {args.weight_decay}
-                    -----------------------------------
-                    Evaluation:
-                        Metrics: {Evaluation.eval_metrics}
-                        @k: {args.at_k}
-                        Lattice level: {args.comb_size}
-                    ===================================
-                """
+    Training using a GNN of the model {args.model}
+    ===================================
+    Hyperparameters:
+        Seed: {seed}
+        Hidden channels: {args.hidden_channels}
+        Number of layers: {args.num_layers}
+        Dropout probability: {args.p_dropout}
+        Learning rate: {args.lr}
+        Weight decay: {args.weight_decay}
+    -----------------------------------
+    Evaluation:
+        Metrics: {Evaluation.eval_metrics}
+        @k: {args.at_k}
+        Lattice level: {args.comb_size}
+    ===================================
+    """
     if args.display:
         print(info_string)
     return info_string
