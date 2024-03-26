@@ -167,6 +167,9 @@ class LogicalDatasetGenerator:
     def _add_random_noise(self, df):
         random_noise_mean = self.hyperparams['random_noise_mean']
         random_noise_std = self.hyperparams['random_noise_std']
+        if random_noise_mean < 0:
+            # Without random noise
+            return df
         feature_list = [f'x_{i}' for i in range(self.feature_num)]
         for subgroup in range(self.subgroups_num):
             tmp_df = df[df['subgroup'] == subgroup].copy()
@@ -214,7 +217,7 @@ class LogicalDatasetGenerator:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
-    parser.add_argument('--formula', type=str, default='0', help='Index of the formula to be generated')
+    parser.add_argument('--formula', type=str, default='1', help='Index of the formula to be generated')
     parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
     args = parser.parse_args()
 
