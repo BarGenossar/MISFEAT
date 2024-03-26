@@ -1,4 +1,5 @@
 import math
+from config import Evaluation
 
 
 def convert_binary_to_decimal(binary):
@@ -41,3 +42,35 @@ def read_feature_num_from_txt(dataset_path):
         if 'feature_num' in line:
             return int(line.split(':')[-1].strip())
     return None
+
+
+def read_paths(args):
+    dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+    graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
+    hyperparams = (f"{args.model}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
+                   f"{args.p_dropout}_lr{args.lr}_weight_decay{args.weight_decay}")
+    file_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/{hyperparams}/"
+    return dataset_path, graph_path, file_path
+
+
+def generate_info_string(args, seed):
+    info_string = f"""
+                    Training using a GNN of the model {args.model}
+                    ===================================
+                    Hyperparameters:
+                        Seed: {seed}
+                        Hidden channels: {args.hidden_channels}
+                        Number of layers: {args.num_layers}
+                        Dropout probability: {args.p_dropout}
+                        Learning rate: {args.lr}
+                        Weight decay: {args.weight_decay}
+                    -----------------------------------
+                    Evaluation:
+                        Metrics: {Evaluation.eval_metrics}
+                        @k: {args.at_k}
+                        Lattice level: {args.comb_size}
+                    ===================================
+                """
+    if args.display:
+        print(info_string)
+    return info_string
