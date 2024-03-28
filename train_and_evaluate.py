@@ -59,7 +59,8 @@ def get_eval_metric_func():
     # TODO: Consider adding more evaluation metrics
     eval_metric_func = {
         'ndcg': compute_ndcg,
-        'hits': compute_hits
+        'hits': compute_hits,
+        'MAE': compute_MAE
     }
     return Evaluation.eval_metrics, eval_metric_func
 
@@ -98,6 +99,12 @@ def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, result
     return results
 
 
+def compute_MAE(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+    # TODO: Implement Mean Absolute Error
+    pass
+
+
+
 def print_results(results, at_k, comb_size, subgroup):
     print(5 * '======================')
     print(f'Evaluation results for subgroup {subgroup} with comb_size={comb_size} and at_k={at_k}:')
@@ -115,8 +122,6 @@ def save_results(test_results, dir_path, seed):
     with open(results_path, 'wb') as f:
         pickle.dump(test_results, f)
     return
-
-
 
 
 if __name__ == "__main__":
