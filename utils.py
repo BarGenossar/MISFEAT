@@ -3,6 +3,7 @@ import torch
 from config import Evaluation
 import os
 import pickle
+import numpy as np
 
 
 def convert_binary_to_decimal(binary):
