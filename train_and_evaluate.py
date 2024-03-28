@@ -1,4 +1,6 @@
 import os
+
+import numpy as np
 import torch
 from matplotlib import pyplot as plt
 import pickle
@@ -32,27 +34,27 @@ def test(lattice_graph, model, g_id, at_k, comb_size, feature_num):
         out = model(lattice_graph.x_dict, lattice_graph.edge_index_dict)
     labels = lattice_graph[g_id].y
     predictions = out[g_id]
-    results = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
-    print_results(results, at_k, comb_size, g_id)
-    return results
+    tmp_results_dict = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
+    print_results(tmp_results_dict, at_k, comb_size, g_id)
+    return tmp_results_dict
 
 
 def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
-    eval_metrics, eval_metric_func = get_eval_metric_func()
+    eval_metrics, eval_func = get_eval_metric_func()
     comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
     sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
     sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
-    results = dict()
+    g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
-        results[metric] = dict()
-        if metric not in eval_metric_func:
-            raise ValueError(f"Invalid evaluation metric: {metric}")
-        else:
-            if type(at_k) is not list:
-                at_k = [at_k]
-            for k in at_k:
-                results = eval_metric_func[metric](ground_truth, k, sorted_gt_indices, sorted_pred_indices, results)
-    return results
+        at_k = verify_at_k(at_k)
+        for k in at_k:
+            g_results = eval_func[metric](ground_truth, k, sorted_gt_indices, sorted_pred_indices, g_results)
+    return g_results
+
+def verify_at_k(at_k):
+    if type(at_k) is not list:
+        at_k = [at_k]
+    return at_k
 
 
 def get_eval_metric_func():
@@ -115,13 +117,32 @@ def print_results(results, at_k, comb_size, subgroup):
     return
 
 
-def save_results(test_results, dir_path, seed):
+def save_results(test_results, dir_path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    results_path = dir_path + f'results_seed{seed}.pkl'
+    results_path = dir_path + f'results.pkl'
+    final_test_results = comp_ave_results(test_results)
     with open(results_path, 'wb') as f:
-        pickle.dump(test_results, f)
+        pickle.dump(final_test_results, f)
     return
+
+
+def comp_ave_results(results_dict):
+    subgroup_list = list(results_dict[1].keys())
+    eval_metrics = list(results_dict[1][subgroup_list[0]].keys())
+    at_k = verify_at_k(Evaluation.at_k)
+    final_results = {subgroup: {metric: {k: round(np.mean([results_dict[seed][subgroup][metric][k]
+                                                           for seed in results_dict]), 4) for k in at_k}
+                                for metric in eval_metrics} for subgroup in subgroup_list}
+    return final_results
+
+
+def initialize_model_and_optimizer(args):
+    model = LatticeGNN(args.model, feature_num, args.hidden_channels, args.num_layers, args.p_dropout)
+    model = to_hetero(model, lattice_graph.metadata())
+    model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    return model, optimizer
 
 
 if __name__ == "__main__":
@@ -141,27 +162,25 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=True)
     args = parser.parse_args()
-
+    seeds_num = args.seeds_num
     dataset_path, graph_path, dir_path = read_paths(args)
     feature_num = read_feature_num_from_txt(dataset_path)
 
     lattice_graph = torch.load(graph_path)
-    for seed in range(1, args.seeds_num + 1):
+    subgroups = lattice_graph.x_dict.keys()
+    results_dict = {seed: {subgroup: dict() for subgroup in subgroups} for seed in range(1, seeds_num + 1)}
+    for seed in range(1, seeds_num + 1):
         info_string = generate_info_string(args, seed)
         torch.manual_seed(seed)
-        model = LatticeGNN(args.model, feature_num, args.hidden_channels, args.num_layers, args.p_dropout)
-        model = to_hetero(model, lattice_graph.metadata())
-        model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         criterion = torch.nn.MSELoss()
-        subgroups = lattice_graph.x_dict.keys()
         loss_vals = {subgroup: [] for subgroup in subgroups}
         for subgroup in subgroups:
             print(f"\nTraining on subgroup {subgroup}...")
+            model, optimizer = initialize_model_and_optimizer(args)
             for epoch in range(1, args.epochs + 1):
                 loss_val = train(lattice_graph, model, subgroup, optimizer, criterion)
                 loss_vals[subgroup].append(loss_val)
                 if epoch == 1 or epoch % 5 == 0:
                     print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
-            test_results = test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
-        save_results(test_results, dir_path, seed)
+            results_dict[seed][subgroup] = test(lattice_graph, model, subgroup, args.at_k, args.comb_size, feature_num)
+    save_results(results_dict, dir_path)
