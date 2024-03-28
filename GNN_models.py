@@ -7,7 +7,7 @@ from torch.nn import Linear
 
 
 class LatticeGNN(torch.nn.Module):
-    def __init__(self, gnn_model, input_channels, hidden_channels, num_layers=3, p_dropout=0.2, seed=2):
+    def __init__(self, gnn_model, input_channels, hidden_channels, seed, num_layers=3, p_dropout=0.2):
         super(LatticeGNN, self).__init__()
         seed_everything(seed)
         self.model = self._set_model(gnn_model)
