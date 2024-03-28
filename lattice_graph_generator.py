@@ -7,6 +7,7 @@ from collections import defaultdict
 from sklearn.metrics import mutual_info_score
 from utils import *
 from config import LatticeGeneration
+import argparse
 import tqdm
 import warnings
 warnings.filterwarnings('ignore')
@@ -192,8 +193,6 @@ class FeatureLatticeGraph:
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description='Feature Lattice Graph Generation')
     parser.add_argument('--formula', type=str, default=LatticeGeneration.formula_idx, help='index of the formula')
     parser.add_argument('--config', type=str, default=LatticeGeneration.hyperparams_idx, help='index of configuration')
@@ -204,13 +203,6 @@ if __name__ == "__main__":
     parser.add_argument('--edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
     args = parser.parse_args()
-
-    # formula_idx = LatticeGeneration.formula_idx
-    # hyperparams_idx = LatticeGeneration.hyperparams_idx
-    # min_k = LatticeGeneration.min_k
-    # within_level_edges = LatticeGeneration.within_level_edges
-    # is_hetero = LatticeGeneration.is_hetero
-    # with_edge_attrs = LatticeGeneration.with_edge_attrs
 
     dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
     feature_num = read_feature_num_from_txt(dataset_path)
