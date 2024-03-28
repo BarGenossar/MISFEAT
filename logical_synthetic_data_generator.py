@@ -225,3 +225,4 @@ if __name__ == '__main__':
     data = LogicalDatasetGenerator(args.formula, args.config, configs['formulas'][args.formula]['formula'],
                                    configs['hyperparams'][args.config])
     data.save()
+
