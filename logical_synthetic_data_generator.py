@@ -15,7 +15,7 @@ class LogicalDatasetGenerator:
         self.feature_range = hyperparams['feature_range']  # requirement - list from 0 to n with increments of 1
         self.formula = formula
         self.hyperparams = hyperparams
-        self.feature_pool = [f'x_{i}' for i in range(self.feature_num)]
+        self.feature_pool = [f'f_{i}' for i in range(self.feature_num)]
         self.operator_dict = self._get_operator_dict()
         self.relevant_features = self._get_relevant_features()
         self.redundant_features = self._get_redundant_features()
@@ -100,7 +100,7 @@ class LogicalDatasetGenerator:
 
     def _generate_dataframe(self, tmp_dataset):
         df = pd.DataFrame(tmp_dataset)
-        df = df[[f'x_{i}' for i in range(self.feature_num)] + ['y']]
+        df = df[[f'f_{i}' for i in range(self.feature_num)] + ['y']]
         df['subgroup'] = np.random.randint(0, self.subgroups_num, len(df))
         df = self._add_random_noise(df)
         return df
@@ -170,7 +170,7 @@ class LogicalDatasetGenerator:
         if random_noise_mean < 0:
             # Without random noise
             return df
-        feature_list = [f'x_{i}' for i in range(self.feature_num)]
+        feature_list = [f'f_{i}' for i in range(self.feature_num)]
         for subgroup in range(self.subgroups_num):
             tmp_df = df[df['subgroup'] == subgroup].copy()
             for feature in feature_list:
