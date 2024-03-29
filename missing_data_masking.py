@@ -17,13 +17,11 @@ class MissingDataMasking:
         missing_indices_dict = {subgroup: dict() for subgroup in self.subgroups}
         binary_vecs = [convert_decimal_to_binary(i, self.feature_num) for i in range(2**self.feature_num)]
         for subgroup in self.subgroups:
-            for feature_idx in range(self.feature_num):
+            for f_idx in range(self.feature_num):
                 if np.random.rand() < self.general_missing_prob:
-                    missing_indices_dict[subgroup][f'f_{feature_idx}'] = self._get_feature_indices(feature_idx,
-                                                                                                   binary_vecs)
-                #  missing_indices_dict[subgroup]['all'] is a list of indices appear at least once in the subgroup
+                    missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
                 missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
         return missing_indices_dict
 
     def _get_feature_indices(self, feature_idx, binary_vecs):
-        return [i for i in range(len(binary_vecs)) if binary_vecs[i][self.feature_num - feature_idx - 1] == '1']
+        return [i - 1 for i in range(len(binary_vecs)) if binary_vecs[i][self.feature_num - feature_idx - 1] == '1']
