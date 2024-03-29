@@ -1,8 +1,9 @@
 
 import argparse
 from GNN_models import LatticeGNN
-from config import LatticeGeneration, GNN
+from config import LatticeGeneration, GNN, Sampling
 from missing_data_masking import MissingDataMasking
+from sampler import NodeSampler
 from utils import *
 from torch_geometric.nn import to_hetero
 import warnings
@@ -23,13 +24,13 @@ def train(lattice_graph, train_indices, model, g_id, optimizer, criterion):
     return loss.item()
 
 
-def test(lattice_graph, model, g_id, at_k, comb_size, feature_num):
+def test(lattice_graph, test_indices, model, g_id, at_k, comb_size, feature_num):
     lattice_graph.to(device)
     model.eval()
     with torch.no_grad():
         out = model(lattice_graph.x_dict, lattice_graph.edge_index_dict)
-    labels = lattice_graph[g_id].y
-    predictions = out[g_id]
+    labels = lattice_graph[g_id].y[test_indices]
+    predictions = out[g_id][test_indices]
     tmp_results_dict = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
     print_results(tmp_results_dict, at_k, comb_size, g_id)
     return tmp_results_dict
@@ -53,12 +54,13 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
     parser.add_argument('--p_dropout', type=float, default=GNN.p_dropout)
     parser.add_argument('--epochs', type=int, default=GNN.epochs)
+    parser.add_argument('--sampling_ratio', type=float, default=0.0)
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size', type=int, default=Evaluation.comb_size)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
-    parser.add_argument('--display', type=bool, default=True)
+    parser.add_argument('--display', type=bool, default=False)
     args = parser.parse_args()
 
     config_idx = args.config
@@ -84,11 +86,12 @@ if __name__ == "__main__":
             model, optimizer = initialize_model_and_optimizer(args)
             train_indices = [idx for idx in range(lattice_graph[subgroup].num_nodes) if idx not in
                              missing_indices_dict[subgroup]['all']]
+            test_indices = missing_indices_dict[subgroup]['all']
             for epoch in range(1, epochs + 1):
                 loss_val = train(lattice_graph, train_indices, model, subgroup, optimizer, criterion)
                 loss_vals[subgroup].append(loss_val)
                 if epoch == 1 or epoch % 5 == 0:
                     continue
                     # print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
-            results_dict[seed][subgroup] = test(lattice_graph, model, subgroup, at_k, comb_size, feature_num)
+            results_dict[seed][subgroup] = test(lattice_graph, test_indices, model, subgroup, at_k, comb_size, feature_num)
     save_results(results_dict, dir_path, comb_size, args)

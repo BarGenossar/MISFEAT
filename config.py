@@ -1,7 +1,7 @@
 
 class LatticeGeneration:
-    formula_idx = 1
-    hyperparams_idx = 1
+    formula_idx = 2
+    hyperparams_idx = 2
     min_k = 1
     within_level_edges = False
     is_hetero = False
@@ -9,8 +9,13 @@ class LatticeGeneration:
 
 
 class MissingDataConfig:
-    general_missing_prob = 0.2
+    general_missing_prob = 0.1
     missing_rate_dict = {'relevant': 0.2, 'correlated': 0.2, 'redundant': 0.2, 'noisy': 0.2}
+
+
+class Sampling:
+    method= 'random'
+    sampling_ratio = 0.5
 
 
 class GNN:
