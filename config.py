@@ -31,3 +31,10 @@ class Evaluation:
     comb_size = 4
     eval_metrics = ['ndcg', 'hits']
 
+# TODO: Add option to save models in pt based on some parameter in the command line. Must save model for each of the
+#  subgroups.
+# TODO: Important: Add multiprocessing to lattice generator to compute the mutual information.
+# TODO: Think about how to create formulas / play with parameters so that there aren’t many groups that have high mutual
+#  information. Obviously in notebook.
+# TODO: Check if mutual information can be computed on the GPU.
+# TODO: Think about how we can add noise for different subgroups in the synthetic data.

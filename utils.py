@@ -83,7 +83,7 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 
 def compute_dcg(ground_truth, sorted_indices, at_k):
     DCG = 0
-    for i in range(1, min(at_k + 1), len(sorted_indices)):
+    for i in range(1, min(at_k + 1, len(sorted_indices))):
         DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
     return DCG
 
@@ -127,9 +127,12 @@ def save_results(test_results, dir_path, comb_size, args):
 
 
 def comp_ave_results(results_dict):
-    subgroup_list = list(results_dict[1].keys())
-    eval_metrics = list(results_dict[1][subgroup_list[0]].keys())
-    at_k = list(results_dict[1][subgroup_list[0]][eval_metrics[0]].keys())
+    for seed in results_dict.keys():
+        idx = seed  # Just to get the first seed in case the seed is not 1
+        break
+    subgroup_list = list(results_dict[idx].keys())
+    eval_metrics = list(results_dict[idx][subgroup_list[0]].keys())
+    at_k = list(results_dict[idx][subgroup_list[0]][eval_metrics[0]].keys())
     final_results = {subgroup: {metric: {k: round(np.mean([results_dict[seed][subgroup][metric][k]
                                                            for seed in results_dict]), 4) for k in at_k}
                                 for metric in eval_metrics} for subgroup in subgroup_list}

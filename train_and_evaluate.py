@@ -24,7 +24,7 @@ def train(lattice_graph, train_indices, model, g_id, optimizer, criterion):
     return loss.item()
 
 
-def test(lattice_graph, test_indices, model, g_id, at_k, comb_size, feature_num):
+def test(lattice_graph, test_indices, model, g_id, at_k, comb_size, feature_num, show_results=True):
     lattice_graph.to(device)
     model.eval()
     with torch.no_grad():
@@ -32,7 +32,8 @@ def test(lattice_graph, test_indices, model, g_id, at_k, comb_size, feature_num)
     labels = lattice_graph[g_id].y[test_indices]
     predictions = out[g_id][test_indices]
     tmp_results_dict = compute_eval_metrics(labels, predictions, at_k, comb_size, feature_num)
-    print_results(tmp_results_dict, at_k, comb_size, g_id)
+    if show_results:
+        print_results(tmp_results_dict, at_k, comb_size, g_id)
     return tmp_results_dict
 
 
@@ -54,13 +55,15 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
     parser.add_argument('--p_dropout', type=float, default=GNN.p_dropout)
     parser.add_argument('--epochs', type=int, default=GNN.epochs)
-    parser.add_argument('--sampling_ratio', type=float, default=0.0)
+    parser.add_argument('--sampling_ratio', type=float, default=0.8)
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size', type=int, default=Evaluation.comb_size)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
+    parser.add_argument('--pretrained', type=bool, default=False)
+    parser.add_argument('--save_model', type=bool, default=False)
     args = parser.parse_args()
 
     config_idx = args.config
@@ -75,23 +78,68 @@ if __name__ == "__main__":
     lattice_graph = torch.load(graph_path)
     subgroups = lattice_graph.x_dict.keys()
     missing_indices_dict = MissingDataMasking(feature_num, subgroups, config_idx).missing_indices_dict
-    results_dict = {seed: {subgroup: dict() for subgroup in subgroups} for seed in range(1, seeds_num + 1)}
-    for seed in range(1, seeds_num + 1):
-        info_string = generate_info_string(args, seed)
-        torch.manual_seed(seed)
-        criterion = torch.nn.MSELoss()
-        loss_vals = {subgroup: [] for subgroup in subgroups}
+    try:
+        if not args.pretrained:
+            raise AttributeError
+        test_indices = {subgroup: missing_indices_dict[subgroup]['all'] for subgroup in subgroups}
+        results_dict = {'.': {}}
         for subgroup in subgroups:
-            print(f"\nTraining on subgroup {subgroup}...")
-            model, optimizer = initialize_model_and_optimizer(args)
-            train_indices = [idx for idx in range(lattice_graph[subgroup].num_nodes) if idx not in
-                             missing_indices_dict[subgroup]['all']]
-            test_indices = missing_indices_dict[subgroup]['all']
-            for epoch in range(1, epochs + 1):
-                loss_val = train(lattice_graph, train_indices, model, subgroup, optimizer, criterion)
-                loss_vals[subgroup].append(loss_val)
-                if epoch == 1 or epoch % 5 == 0:
-                    continue
-                    # print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
-            results_dict[seed][subgroup] = test(lattice_graph, test_indices, model, subgroup, at_k, comb_size, feature_num)
-    save_results(results_dict, dir_path, comb_size, args)
+            path = f"{dir_path}{args.model}_{subgroup}.pt"
+            model = torch.load(path)
+            model.to(device)
+            model.eval()
+            results_dict['.'][subgroup] = test(lattice_graph, test_indices[subgroup], model,
+                                               subgroup, at_k, comb_size, feature_num)
+        save_results(results_dict, dir_path, comb_size, args)
+
+    except (AttributeError, FileNotFoundError) as e:
+        results_dict = {seed: {subgroup: dict() for subgroup in subgroups} for seed in range(1, seeds_num + 1)}
+        for seed in range(1, seeds_num + 1):
+            info_string = generate_info_string(args, seed)
+            torch.manual_seed(seed)
+            criterion = torch.nn.MSELoss()
+            loss_vals = {subgroup: [] for subgroup in subgroups}
+            for subgroup in subgroups:
+                print(f"\nTraining on subgroup {subgroup}...")
+                model, optimizer = initialize_model_and_optimizer(args)
+                non_missing = [idx for idx in range(lattice_graph[subgroup].num_nodes) if idx not in
+                               missing_indices_dict[subgroup]['all']]
+                if args.sampling_ratio == 1.0:
+                    train_indices = non_missing
+                    validation_indices = []
+                else:
+                    sampler = NodeSampler(subgroups, config_idx, non_missing, args.sampling_ratio, Sampling.method)
+                    train_indices = sampler.selected_samples
+                    validation_indices = [idx for idx in non_missing if idx not in train_indices]
+                test_indices = missing_indices_dict[subgroup]['all']
+                count_validation_static = 0
+                previous_validation = -1  # Evaluation metric can't be negative
+                best_validation = -1
+
+                for epoch in range(1, epochs + 1):
+                    print(f'epoch {epoch}')
+                    if count_validation_static == 5:  # 5 epochs with no change to the evaluation on the validation
+                        break
+                    loss_val = train(lattice_graph, train_indices, model, subgroup, optimizer, criterion)
+                    loss_vals[subgroup].append(loss_val)
+                    if validation_indices:
+                        output = test(lattice_graph, validation_indices, model, subgroup, at_k, 1, feature_num, False)
+                        single_output = output[Evaluation.eval_metrics[0]][at_k[-1]]  # First evaluation metric at
+                        # highest k
+                        if single_output == previous_validation:
+                            count_validation_static += 1
+                        else:
+                            count_validation_static = 0
+                        if args.save_model and single_output > best_validation:
+                            best_validation = single_output
+                            torch.save(model, f"{dir_path}{args.model}_{subgroup}.pt")  # TODO: do we want to save
+                            # for each seed? ask bar
+                        previous_validation = single_output
+
+                    if epoch == 1 or epoch % 5 == 0:
+                        continue
+                        # print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
+                results_dict[seed][subgroup] = test(lattice_graph, test_indices, model, subgroup, at_k, comb_size, feature_num)
+                if not validation_indices and args.save_model:
+                    torch.save(model, f"{dir_path}{args.model}_{subgroup}.pt")
+        save_results(results_dict, dir_path, comb_size, args)
