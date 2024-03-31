@@ -6,6 +6,7 @@ class LatticeGeneration:
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
+    num_workers = 5  # Number of workers for multiprocessing
 
 
 class MissingDataConfig:
@@ -31,8 +32,7 @@ class Evaluation:
     comb_size = 4
     eval_metrics = ['ndcg', 'hits']
 
-# TODO: Add option to save models in pt based on some parameter in the command line. Must save model for each of the
-#  subgroups.
+
 # TODO: Important: Add multiprocessing to lattice generator to compute the mutual information.
 # TODO: Think about how to create formulas / play with parameters so that there aren’t many groups that have high mutual
 #  information. Obviously in notebook.

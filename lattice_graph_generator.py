@@ -10,6 +10,7 @@ from config import LatticeGeneration
 import argparse
 import tqdm
 import warnings
+import multiprocessing
 warnings.filterwarnings('ignore')
 
 
@@ -43,6 +44,8 @@ class FeatureLatticeGraph:
         for g_id in range(self.subgroups_num):
             print(f"Generating the mappings dictionary for subgroup {g_id}:\n")
             mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, mappings_dict, dataframe, y_series)
+            print(mappings_dict)
+            print(prev_tmp_dict)
             for comb_size in range(self.min_k + 1, self.max_k + 1):
                 mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
                                                                                     dataframe, y_series, prev_tmp_dict)
@@ -57,7 +60,6 @@ class FeatureLatticeGraph:
             tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
             mappings_dict = self._update_mappings_dict(g_id, mappings_dict, comb_size, comb, tmp_series, y_series)
         prev_tmp_dict = new_tmp_dict.copy()
-        print(mappings_dict)
         return mappings_dict, prev_tmp_dict
 
     def _update_mappings_dict(self, g_id, mappings_dict, comb_size, comb, tmp_series, y_series):
@@ -66,7 +68,7 @@ class FeatureLatticeGraph:
         mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
         mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
         mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
-        return dict(mappings_dict)
+        return mappings_dict
 
     def _initialize_tmp_dict(self, g_id, mappings_dict, dataframe, y_series):
         prev_tmp_dict = dict()
