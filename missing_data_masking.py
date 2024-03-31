@@ -21,7 +21,7 @@ class MissingDataMasking:
                 if np.random.rand() < self.general_missing_prob:
                     missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
                 missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
-            if len(missing_indices_dict[subgroup]['all']) == 0:  # TODO: talk to bar about this.
+            if len(missing_indices_dict[subgroup]['all']) == 0:  # TODO: talk to bar about this. we want for each subgroup to have at least one missing feature
                 random_idx = np.random.choice(range(self.feature_num))
                 missing_indices_dict[subgroup][f'f_{random_idx}'] = self._get_feature_indices(random_idx, binary_vecs)
                 missing_indices_dict[subgroup]['all'] = missing_indices_dict[subgroup][f'f_{random_idx}']
