@@ -24,6 +24,7 @@ class FeatureLatticeGraph:
         self.with_edge_attrs = with_edge_attrs
         self.dataset = self._read_dataset(dataset_path)
         self.dataframe = self.dataset.astype(str)
+        self.prev_sub_series = {}
         self.mappings_dict = defaultdict(dict)
         self.subgroups_num = self.dataset['subgroup'].nunique()
         self.y_series = self.dataframe['y'].copy()
@@ -61,10 +62,12 @@ class FeatureLatticeGraph:
     #     return self.create_mapping(comb, tmp_series)
 
     def _create_comb_size_mappings_dict(self, comb_size, feature_combs):
-        with multiprocessing.Pool(processes=LatticeGeneration.num_workers) as pool:
-            values = pool.map(self._create_feature_set_col, feature_combs)
+        with multiprocessing.Pool() as pool:
+            mappings = pool.map(self._create_feature_set_col, feature_combs)
 
-        self.mappings_dict[self.subgroup][comb_size] = dict(zip(feature_combs, values))
+        prev_sub_series, mappings = zip(*mappings)
+        self.mappings_dict[self.subgroup][comb_size] = dict(zip(feature_combs, mappings))
+        self.prev_sub_series = dict(zip(feature_combs, prev_sub_series))
 
     def create_mapping(self, comb, tmp_series):
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
@@ -73,6 +76,9 @@ class FeatureLatticeGraph:
             'binary_vector': binary_vec,
             'node_id': convert_binary_to_decimal(binary_vec) - 1
         }
+
+    def _get_sub_series(self, comb):
+        return self.prev_sub_series[comb[:-1]] + self.dataframe[comb[-1]]
 
     def _initialize_mapping(self, feature_combs):
         """
@@ -83,13 +89,12 @@ class FeatureLatticeGraph:
         for comb in feature_combs:
             sub_df = self.dataframe[list(comb)]
             tmp_series = sub_df.apply(lambda x: ''.join(x), axis=1)
+            self.prev_sub_series[comb] = tmp_series
             self.mappings_dict[self.subgroup][len(comb)][comb] = self.create_mapping(comb, tmp_series)
 
     def _create_feature_set_col(self, feature_set):
-        tmp_dict = self.mappings_dict[self.subgroup][len(feature_set) - 1]
-        sub_df = self.dataframe[list(feature_set)]
-        tmp_series = sub_df.apply(lambda x: ''.join(x), axis=1)
-        return self.create_mapping(feature_set, tmp_series)
+        tmp_series = self._get_sub_series(feature_set)
+        return tmp_series, self.create_mapping(feature_set, tmp_series)
 
     def _create_multiple_feature_lattice(self):
         print(f"\nCreating the feature lattice...")
