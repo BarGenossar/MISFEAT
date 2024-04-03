@@ -61,12 +61,14 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
+    parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     args = parser.parse_args()
 
     config_idx = args.config
     seeds_num = args.seeds_num
     comb_size = args.comb_size
     epochs = args.epochs
+    manual = args.manual_md
     at_k = verify_at_k(args.at_k)
 
     dataset_path, graph_path, dir_path = read_paths(args)
@@ -74,7 +76,7 @@ if __name__ == "__main__":
 
     lattice_graph = torch.load(graph_path)
     subgroups = lattice_graph.x_dict.keys()
-    missing_indices_dict = MissingDataMasking(feature_num, subgroups, config_idx).missing_indices_dict
+    missing_indices_dict = MissingDataMasking(feature_num, subgroups, config_idx, manual).missing_indices_dict
     results_dict = {seed: {subgroup: dict() for subgroup in subgroups} for seed in range(1, seeds_num + 1)}
     for seed in range(1, seeds_num + 1):
         info_string = generate_info_string(args, seed)
