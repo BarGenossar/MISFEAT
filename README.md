@@ -31,8 +31,8 @@ Then you will need to run the following command:
 
 ```python train_and_evaluate.py --data_path <path_to_data.pkl> --manual_md True```
 
-The results dictinary, presenting the average performance over several seeds (the default value is 3)
-will be saved in the the same folder as the dataset.
+The results dictinary, presenting the average performance over several seeds (the default value 
+is 3), will be saved in the the same folder as the dataset.
 Some other hyperparameters can be set in the train_and_evaluate.py script, but there is
 no need to change them for the initial experiments.
 
@@ -51,4 +51,4 @@ dataset) with each of the following sampling rate:
     - 0.5 
     - 0.25
 
-- Run Each one of the baseline over (but in a different script)
+- Run Each one of the baseline over (but in a different script) the view
