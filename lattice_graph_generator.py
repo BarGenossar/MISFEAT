@@ -47,8 +47,6 @@ class FeatureLatticeGraph:
         for g_id in range(self.subgroups_num):
             print(f"Generating the mappings dictionary for subgroup {g_id}:\n")
             mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, mappings_dict, dataframe, y_series)
-            print(mappings_dict)
-            print(prev_tmp_dict)
             for comb_size in range(self.min_k + 1, self.max_k + 1):
                 mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
                                                                                     dataframe, y_series, prev_tmp_dict)
