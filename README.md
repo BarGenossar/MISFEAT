@@ -46,9 +46,46 @@ For each dataset (feature lattice graph):
 
 For each one of the three views:
 - Run the training and evaluation script with the manual_md set to True (for the real-world 
-dataset) with each of the following sampling rate:
-    - 1.0 (no sampling)
+dataset) with each of the following sampling rate (this is actually the budget):
+    - 1.0 (no sampling) 
+    - 0.75
     - 0.5 
     - 0.25
 
-- Run Each one of the baseline over (but in a different script) the view
+- If we have several sampling approaches we have to conduct the experiments with these rates 
+for each of them. According to the current suggestions we have:
+  - Random
+  - Uniform
+  - GIBS
+
+
+- Run Each one of the baseline over the view:
+    - Imputation
+    - Network
+    - MLP
+
+The baselines should be executed from a different script.
+
+The final main results table should be like this (for each dataset and for each view of the dataset):
+
+| Method                                 | MAE | NDCG@3 | NDCG@5 | NDCG@10 | HITS@3 | HITS@5 | HITS@10 |
+|----------------------------------------| ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| Imputation                             |   |   |    |    |   |    |    |
+| Network                                |   |   |    |    |   |    |    |
+| GNN - no sampling                      |   |   |    |    |   |    |    |
+
+
+For the ablation study we need:
+
+| Method            | MAE | NDCG@3 | NDCG@5 | NDCG@10 | HITS@3 | HITS@5 | HITS@10 |
+|-------------------| ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| GNN - no sampling |   |   |    |    |   |    |    |
+| GNN Random 0.75   |   |   |    |    |   |    |    |
+| GNN Random 0.5    |   |   |    |    |   |    |    |
+| GNN Random 0.25   |   |   |    |    |   |    |    |
+| GNN Uniform 0.75  |   |   |    |    |   |    |    |
+| GNN Uniform 0.5   |   |   |    |    |   |    |    |
+| GNN Uniform 0.25  |   |   |    |    |   |    |    |
+| GNN Gibs 0.75     |   |   |    |    |   |    |    |
+| GNN Gibs 0.5      |   |   |    |    |   |    |    |
+| GNN Gibs 0.25     |   |   |    |    |   |    |    |
