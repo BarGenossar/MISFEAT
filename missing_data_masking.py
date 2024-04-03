@@ -29,6 +29,9 @@ class MissingDataMasking:
         for subgroup in self.subgroups:
             print(f"Enter the missing feature indexes for subgroup {subgroup} separated by commas:")
             missing_features = input().split(',')
+            # if the input is empty, skip
+            if missing_features == ['']:
+                continue
             for f_idx in missing_features:
                 missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(int(f_idx), binary_vecs)
             missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
