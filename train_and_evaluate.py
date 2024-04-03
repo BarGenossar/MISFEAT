@@ -62,6 +62,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
+    parser.add_argument('data_path', type=str, help='Path to the dataset including the .pkl prefix')
     args = parser.parse_args()
 
     config_idx = args.config
@@ -71,7 +72,10 @@ if __name__ == "__main__":
     manual = args.manual_md
     at_k = verify_at_k(args.at_k)
 
-    dataset_path, graph_path, dir_path = read_paths(args)
+    if args.data_path:
+        dataset_path = read_paths(args, args.data_path)
+    else:
+        dataset_path, graph_path, dir_path = read_paths(args)
     feature_num = read_feature_num_from_txt(dataset_path)
 
     lattice_graph = torch.load(graph_path)
