@@ -119,6 +119,7 @@ if __name__ == "__main__":
                 for epoch in range(1, epochs + 1):
                     print(f'epoch {epoch}')
                     if count_validation_static == 5:  # 5 epochs with no change to the evaluation on the validation
+                        # TODO add as hyperparameter
                         break
                     loss_val = train(lattice_graph, train_indices, model, subgroup, optimizer, criterion)
                     loss_vals[subgroup].append(loss_val)
@@ -126,14 +127,14 @@ if __name__ == "__main__":
                         output = test(lattice_graph, validation_indices, model, subgroup, at_k, 1, feature_num, False)
                         single_output = output[Evaluation.eval_metrics[0]][at_k[-1]]  # First evaluation metric at
                         # highest k
-                        if single_output == previous_validation:
+                        if single_output <= previous_validation:
                             count_validation_static += 1
                         else:
                             count_validation_static = 0
                         if args.save_model and single_output > best_validation:
                             best_validation = single_output
-                            torch.save(model, f"{dir_path}{args.model}_{subgroup}.pt")  # TODO: do we want to save
-                            # for each seed? ask bar
+                            torch.save(model, f"{dir_path}{args.model}_{subgroup}.pt")
+                            # TODO save for each seed, when loading pre trained perform evaluation on each of the seeds.
                         previous_validation = single_output
 
                     if epoch == 1 or epoch % 5 == 0:
