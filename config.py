@@ -25,6 +25,7 @@ class GNN:
     num_layers = 2
     p_dropout = 0
     epochs = 300
+    epochs_stable_val = 5
 
 
 class Evaluation:
