@@ -16,6 +16,11 @@ import multiprocessing
 warnings.filterwarnings('ignore')
 
 
+"""
+For some reason, this does not perform as well as the regular lattice generator.
+"""
+
+
 class FeatureLatticeGraph:
     def __init__(self, dataset_path, feature_num, min_k=1, with_edge_attrs=False):
         self.min_k = min_k
