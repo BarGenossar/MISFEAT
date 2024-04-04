@@ -159,12 +159,15 @@ def print_results(results, at_k, comb_size, subgroup):
     return
 
 
-def read_paths(args):
-    dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-    graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
-    # hyperparams = (f"{args.model}_hidden{args.hidden_channels}_layers{args.num_layers}_dropout"
-    #                f"{args.p_dropout}_lr{args.lr}_weight_decay{args.weight_decay}")
-    dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
+def read_paths(args, data_path=None):
+    if data_path is not None:
+        dataset_path = data_path
+        graph_path = data_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
+        dir_path = data_path.replace('dataset.pkl', '')
+    else:
+        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+        graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
+        dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
     return dataset_path, graph_path, dir_path
 
 
