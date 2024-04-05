@@ -6,6 +6,7 @@ class LatticeGeneration:
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
+    num_workers = 5  # Number of workers for multiprocessing
 
 
 class MissingDataConfig:
@@ -24,10 +25,10 @@ class GNN:
     num_layers = 2
     p_dropout = 0
     epochs = 300
+    epochs_stable_val = 5
 
 
 class Evaluation:
     at_k = [3, 5, 10]
     comb_size = 4
     eval_metrics = ['ndcg', 'hits']
-

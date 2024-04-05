@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch_geometric
 from torch_geometric.data import Data, HeteroData
@@ -10,21 +12,30 @@ from config import LatticeGeneration
 import argparse
 import tqdm
 import warnings
-import time
 import multiprocessing
 warnings.filterwarnings('ignore')
 
 
+"""
+For some reason, this does not perform as well as the regular lattice generator.
+"""
+
+
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, min_k=1, with_edge_attrs=False):
+    def __init__(self, dataset_path, feature_num, min_k=1, with_edge_attrs=False):
         self.min_k = min_k
+        self.max_k = feature_num  # Consider to modify it
+        self.feature_num = feature_num
         self.with_edge_attrs = with_edge_attrs
         self.dataset = self._read_dataset(dataset_path)
-        self.feature_num = self.dataset.shape[1] - 2
+        self.dataframe = self.dataset.astype(str)
+        self.prev_sub_series = {}
+        self.mappings_dict = defaultdict(dict)
         self.subgroups_num = self.dataset['subgroup'].nunique()
+        self.y_series = self.dataframe['y'].copy()
         start = time.time()
-        self.mappings_dict = self._create_mappings_dict()
-        print(f"Time to create the mappings dictionary: {time.time() - start}")
+        self._create_mappings_dict()
+        print(f"Time to create mappings dictionary: {time.time() - start} seconds")
         self.graph = self._create_multiple_feature_lattice()
         self.save(dataset_path)
 
@@ -40,53 +51,55 @@ class FeatureLatticeGraph:
         3. The node ID of the feature combination
         """
         print(f"Generating the mappings dictionary...\n =====================================\n")
-        dataframe = self.dataset.astype(str)
-        mappings_dict = defaultdict(dict)
-        y_series = dataframe['y'].copy()
+        feature_set_combs = {}  # All combinations for all relevant combination sizes
+        for comb_size in range(self.min_k, self.max_k + 1):
+            feature_set_combs[comb_size] = list(combinations(self.dataframe.drop(['y', 'subgroup'], axis=1).columns,
+                                                             comb_size))
         for g_id in range(self.subgroups_num):
+            self.subgroup = g_id
             print(f"Generating the mappings dictionary for subgroup {g_id}:\n")
-            mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, mappings_dict, dataframe, y_series)
-            for comb_size in range(self.min_k + 1, self.feature_num + 1):
-                mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
-                                                                                    dataframe, y_series, prev_tmp_dict)
+            self._initialize_mapping(feature_set_combs[self.min_k])
+            for comb_size in range(self.min_k + 1, self.max_k + 1):
+                self._create_comb_size_mappings_dict(comb_size, feature_set_combs[comb_size])
 
-        return mappings_dict
+    # def compute_value(self, comb):
+    #     tmp_series = self._create_feature_set_col(self.subgroup, comb)
+    #     return self.create_mapping(comb, tmp_series)
 
-    def _create_comb_size_mappings_dict(self, g_id, mappings_dict, comb_size, dataframe, y_series, prev_tmp_dict):
-        new_tmp_dict = dict()
-        mappings_dict[g_id][comb_size] = defaultdict(dict)
-        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
-        for comb in tqdm.tqdm(feature_set_combs):
-            tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
-            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, comb_size, comb, tmp_series, y_series)
-        prev_tmp_dict = new_tmp_dict.copy()
-        return mappings_dict, prev_tmp_dict
+    def _create_comb_size_mappings_dict(self, comb_size, feature_combs):
+        with multiprocessing.Pool() as pool:
+            mappings = pool.map(self._create_feature_set_col, feature_combs)
 
-    def _update_mappings_dict(self, g_id, mappings_dict, comb_size, comb, tmp_series, y_series):
+        prev_sub_series, mappings = zip(*mappings)
+        self.mappings_dict[self.subgroup][comb_size] = dict(zip(feature_combs, mappings))
+        self.prev_sub_series = dict(zip(feature_combs, prev_sub_series))
+
+    def create_mapping(self, comb, tmp_series):
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
-        score = mutual_info_score(tmp_series, y_series)
-        mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
-        mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
-        mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
-        return mappings_dict
+        return {
+            'score': round(mutual_info_score(tmp_series, self.y_series), 4),
+            'binary_vector': binary_vec,
+            'node_id': convert_binary_to_decimal(binary_vec) - 1
+        }
 
-    def _initialize_tmp_dict(self, g_id, mappings_dict, dataframe, y_series):
-        prev_tmp_dict = dict()
-        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_k))
-        mappings_dict[g_id][self.min_k] = defaultdict(dict)
-        for comb in feature_set_combs:
-            tmp_series = dataframe[comb[0]]
-            for i in range(1, len(comb)):
-                tmp_series = tmp_series + dataframe[comb[i]]
-            prev_tmp_dict[comb] = tmp_series.copy()
-            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, self.min_k, comb, tmp_series, y_series)
-        return mappings_dict, prev_tmp_dict
+    def _get_sub_series(self, comb):
+        return self.prev_sub_series[comb[:-1]] + self.dataframe[comb[-1]]
 
-    @staticmethod
-    def _create_feature_set_col(dataframe, feature_set, prev_tmp_dict, new_tmp_dict):
-        tmp_series = prev_tmp_dict[feature_set[:-1]] + dataframe[feature_set[-1]]
-        new_tmp_dict[feature_set] = tmp_series.copy()
-        return tmp_series, new_tmp_dict
+    def _initialize_mapping(self, feature_combs):
+        """
+        Does not use multiprocessing, assuming the first combinations are small
+        """
+        if len(feature_combs) > 0:
+            self.mappings_dict[self.subgroup][len(feature_combs[0])] = {}
+        for comb in feature_combs:
+            sub_df = self.dataframe[list(comb)]
+            tmp_series = sub_df.apply(lambda x: ''.join(x), axis=1)
+            self.prev_sub_series[comb] = tmp_series
+            self.mappings_dict[self.subgroup][len(comb)][comb] = self.create_mapping(comb, tmp_series)
+
+    def _create_feature_set_col(self, feature_set):
+        tmp_series = self._get_sub_series(feature_set)
+        return tmp_series, self.create_mapping(feature_set, tmp_series)
 
     def _create_multiple_feature_lattice(self):
         print(f"\nCreating the feature lattice...")
@@ -97,11 +110,11 @@ class FeatureLatticeGraph:
         return data
 
     def _get_node_features_and_labels(self, data):
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
         for g_id in range(self.subgroups_num):
             x_tensor = torch.zeros(lattice_nodes_num, self.feature_num, dtype=torch.float)
             y_tensor = torch.zeros(lattice_nodes_num, dtype=torch.float)
-            for comb_size in range(self.min_k, self.feature_num + 1):
+            for comb_size in range(self.min_k, self.max_k + 1):
                 for comb in self.mappings_dict[g_id][comb_size].keys():
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     x_tensor[node_id] = torch.tensor([int(digit) for digit in
@@ -113,7 +126,7 @@ class FeatureLatticeGraph:
 
     def _get_edge_index(self, data):
         # TODO: Optimize this function. The current implementation is not efficient.
-        # edges_num = get_lattice_edges_num(self.feature_num, self.min_k, self.feature_num)
+        # edges_num = get_lattice_edges_num(self.feature_num, self.min_k, self.max_k)
         data = self._get_intra_lattice_edges(data)
         data = self._get_inter_lattice_edges(data)
         return data
@@ -126,7 +139,7 @@ class FeatureLatticeGraph:
     def _get_inter_level_edges(self, data):
         for g_id in range(self.subgroups_num):
             edge_index = []
-            for comb_size in range(self.min_k, self.feature_num):
+            for comb_size in range(self.min_k, self.max_k):
                 for comb in self.mappings_dict[g_id][comb_size]:
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     for next_comb in self.mappings_dict[g_id][comb_size + 1]:
@@ -144,12 +157,11 @@ class FeatureLatticeGraph:
         g_str2 = ''.join(('g', str(g_id2)))
         return ''.join((g_str1, 'TO', g_str2))
 
-
     def _get_intra_level_edges(self, data):
         for g_id in range(self.subgroups_num):
             edge_set = set()
             edge_index = []
-            for comb_size in range(max(2, self.min_k), self.feature_num + 1):
+            for comb_size in range(max(2, self.min_k), self.max_k + 1):
                 for comb in self.mappings_dict[g_id][comb_size]:
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     for next_comb in self.mappings_dict[g_id][comb_size]:
@@ -165,7 +177,7 @@ class FeatureLatticeGraph:
         return data
 
     def _get_inter_lattice_edges(self, data):
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.max_k)
         edge_index = [[node_id, node_id] for node_id in range(lattice_nodes_num)]
         for g_id1 in range(self.subgroups_num):
             for g_id2 in range(g_id1 + 1, self.subgroups_num):
@@ -188,12 +200,6 @@ class FeatureLatticeGraph:
         print(f"The lattice graph was saved at {graph_path}")
         return
 
-    # def __len__(self):
-    #     return 1
-    #
-    # def __getitem__(self, idx):
-    #     return self.graph
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Feature Lattice Graph Generation')
@@ -205,14 +211,8 @@ if __name__ == "__main__":
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
     parser.add_argument('--edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
-    parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
     args = parser.parse_args()
 
-    if args.dataset_path is None:
-        # For synthetic datasets
-        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-    else:
-        # For real-world datasets
-        dataset_path = args.dataset_path
-
-    lattice = FeatureLatticeGraph(dataset_path)
+    dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+    feature_num = read_feature_num_from_txt(dataset_path)
+    lattice = FeatureLatticeGraph(dataset_path, feature_num)
