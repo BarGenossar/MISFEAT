@@ -45,7 +45,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #     return model, optimizer
 
 
-class Trainer:
+class PipelineManager:
     def __init__(self, args):
         self.args = args
         self.config_idx = args.config
@@ -54,18 +54,22 @@ class Trainer:
         self.epochs = args.epochs
         self.at_k = verify_at_k(args.at_k)
         self.dataset_path, self.graph_path, self.dir_path = read_paths(args)
-        self.feature_num = read_feature_num_from_txt(self.dataset_path)
-        self.lattice_graph, self.subgroups, self.missing_indices_dict = self.load_graph_information()
+        self.lattice_graph = torch.load(self.graph_path)
+        self.lattice_graph, self.subgroups = self._load_graph_information()
+        self.feature_num = int(np.log2(len(self.lattice_graph['g0']['x']) + 1))
+        self.missing_indices_dict = self._get_missing_data_dict()
         self.test_indices = {subgroup: self.missing_indices_dict[subgroup]['all'] for subgroup in self.subgroups}
 
-    def load_graph_information(self):
+    def _load_graph_information(self):
         lattice_graph = torch.load(self.graph_path)
-        subgroups = lattice_graph.x_dict.keys()
-        missing_indices_dict = MissingDataMasking(self.feature_num, subgroups, self.config_idx,
-                                                  self.args.manual_md).missing_indices_dict
-        return lattice_graph, subgroups, missing_indices_dict
+        subgroups = self.lattice_graph.x_dict.keys()
+        return lattice_graph, subgroups
 
-    def init_model_optim(self, seed):
+    def _get_missing_data_dict(self):
+        return MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
+                                  self.args.manual_md).missing_indices_dict
+
+    def _init_model_optim(self, seed):
         model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, seed, self.args.num_layers,
                            self.args.p_dropout)
         model = to_hetero(model, self.lattice_graph.metadata())
@@ -85,7 +89,7 @@ class Trainer:
         optimizer.step()
         return loss.item()
 
-    def test(self, test_indices, model, g_id, show_results=True):
+    def _evaluate(self, test_indices, model, g_id, show_results=True):
         self.lattice_graph.to(device)
         model.eval()
         with torch.no_grad():
@@ -96,6 +100,18 @@ class Trainer:
         if show_results:
             print_results(tmp_results_dict, self.at_k, self.comb_size, g_id)
         return tmp_results_dict
+
+    def _test_subgroup(self, seed, subgroup, results_dict):
+        path = f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt"
+        model = torch.load(path)
+        model.to(device)
+        model.eval()
+        if self.test_indices[subgroup]:
+            results_dict[seed][subgroup] = self._evaluate(self.test_indices[subgroup], model, subgroup)
+        else:
+            results_dict[seed][subgroup] = {metric: {k: 0 for k in self.at_k} for metric in
+                                            Evaluation.eval_metrics}
+        return results_dict[seed][subgroup]
 
     def save_results(self, results_dict):
         save_results(results_dict, self.dir_path, self.comb_size, self.args)
@@ -111,26 +127,16 @@ class Trainer:
             validation_indices = [idx for idx in non_missing if idx not in train_indices]
         return train_indices, validation_indices
 
-    def evaluate(self, model):
-        pass
 
     def execute(self):
         try:  # try loading pretrained models
-            if not self.args.pretrained:
+            if not self.args.load_model:
                 raise AttributeError
             results_dict = {}
             for seed in range(1, self.seeds_num + 1):
                 results_dict[seed] = {}
                 for subgroup in self.subgroups:
-                    path = f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt"
-                    model = torch.load(path)
-                    model.to(device)
-                    model.eval()
-                    if self.test_indices[subgroup]:
-                        results_dict[seed][subgroup] = self.test(self.test_indices[subgroup], model, subgroup)
-                    else:
-                        results_dict[seed][subgroup] = {metric: {k: 0 for k in self.at_k} for metric in
-                                                        Evaluation.eval_metrics}
+                    results_dict = self._test_subgroup(seed, subgroup, results_dict)
             self.save_results(results_dict)
 
         except (AttributeError, FileNotFoundError) as e:
@@ -146,7 +152,7 @@ class Trainer:
                 for subgroup in self.subgroups:
                     print(f"\nTraining on subgroup {subgroup}...")
 
-                    model, optimizer = self.init_model_optim(seed)
+                    model, optimizer = self._init_model_optim(seed)
 
                     train_indices, validation_indices = self.train_validation_split(all_non_missing[subgroup])
                     count_validation_static = 0
@@ -159,7 +165,7 @@ class Trainer:
                         loss_val = self.train(train_indices, model, subgroup, optimizer, criterion)
                         loss_vals[subgroup].append(loss_val)
                         if validation_indices:
-                            output = self.test(validation_indices, model, subgroup, False)
+                            output = self._evaluate(validation_indices, model, subgroup, False)
                             single_output = output[Evaluation.eval_metrics[0]][self.at_k[-1]]  # First evaluation
                             # metric at highest k
                             if single_output <= previous_validation:
@@ -172,10 +178,9 @@ class Trainer:
                             previous_validation = single_output
 
                         if epoch == 1 or epoch % 5 == 0:
-                            continue
-                            # print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
+                            print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
                     if self.test_indices[subgroup]:
-                        results_dict[seed][subgroup] = self.test(self.test_indices[subgroup], model, subgroup)
+                        results_dict[seed][subgroup] = self._evaluate(self.test_indices[subgroup], model, subgroup)
                     else:
                         results_dict[seed][subgroup] = {metric: {k: 0 for k in self.at_k} for metric in
                                                         Evaluation.eval_metrics}
@@ -202,9 +207,9 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--pretrained', type=bool, default=False)
+    parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    _args = parser.parse_args()
+    args = parser.parse_args()
 
-    trainer = Trainer(_args)
-    trainer.execute()
+    pipeline_object = PipelineManager(args)
+    pipeline_object.execute()
