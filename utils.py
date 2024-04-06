@@ -4,6 +4,7 @@ from config import Evaluation
 import os
 import pickle
 import numpy as np
+import random
 
 
 def convert_binary_to_decimal(binary):
@@ -101,9 +102,8 @@ def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, result
     return results
 
 
-def compute_MAE(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
-    # TODO: Implement Mean Absolute Error
-    pass
+def compute_MAE(ground_truth, preds):
+    return 1 / len(preds) * sum(abs(ground_truth - preds))
 
 
 def get_comb_size_indices(num_nodes, comb_size, feature_num):
@@ -189,3 +189,17 @@ def generate_info_string(args, seed):
     if args.display:
         print(info_string)
     return info_string
+
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True

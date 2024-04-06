@@ -1,0 +1,31 @@
+Formula 2: x_2 xor x_4 and x_5 xor x_9
+Seed: 2
+========================================
+Hyperparameters:
+	subgroups_num: 4
+	feature_num: 12
+	feature_range: [0, 1, 2, 3, 4, 5]
+	redundant_num: 3
+	correlated_num: 3
+	correlated_min_probability: 0.6
+	correlated_max_probability: 0.7
+	redundant_min_subgroup: 2
+	redundant_max_subgroup: 4
+	redundant_flip_probability: 0.25
+	sample_size: 5000
+	random_noise_mean: 0.1
+	random_noise_std: 0.04
+========================================
+
+Relevant features: x_2, x_4, x_5, x_9
+
+Redundant features and the formulas that define them: 
+
+	f_9: x_2 + x_2 ^ x_2 - x_4
+	f_5: x_9 xor x_9 or x_9 xor x_5
+	f_4: x_9 * x_9
+
+Correlated features and probabilities of being equal to label: 
+	f_10: 0.649
+	f_0: 0.657
+	f_2: 0.622
