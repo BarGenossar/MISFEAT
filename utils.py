@@ -51,7 +51,7 @@ def read_feature_num_from_txt(dataset_path):
 
 def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
     eval_metrics, eval_func = get_eval_metric_func()
-    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
+    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)    # test nodes with the given comb_size
     sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
     sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
     g_results = {metric: dict() for metric in eval_metrics}

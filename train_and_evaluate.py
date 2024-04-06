@@ -84,8 +84,6 @@ if __name__ == "__main__":
     
     ## load dataset
     df = pd.read_pickle(args.data_path)
-    print(df)
-    exit()
     base_features = [feat for feat in list(df.columns) if 'f_' in feat]
     feature_num = len(base_features)
     subgroups = [f'g{gid}' for gid in range(df.subgroup.nunique())]
@@ -93,7 +91,6 @@ if __name__ == "__main__":
 
     graph_path = "GeneratedData/Formula2/Config2/dataset_hetero_graph.pt"
     data = torch.load(graph_path)
-
 
     # graph = GraphSampling(
     #     df,
@@ -106,7 +103,6 @@ if __name__ == "__main__":
     # )
 
 
-
     for seed in range(1, seeds_num + 1):
         info_string = generate_info_string(args, seed)
         # torch.manual_seed(seed)
@@ -114,6 +110,10 @@ if __name__ == "__main__":
 
         ## sample missing features, train_indices
         missing_indices_dict = MissingDataMasking(feature_num, subgroups, config_idx, manual).missing_indices_dict
+        # print(missing_indices_dict.keys())
+        # print(missing_indices_dict['g1'].keys())
+        # print(missing_indices_dict['g1']['f_7'])
+        # exit()
         sampler = NodeSampler(subgroups, feature_num, missing_indices_dict, args.sampling_ratio, sampling_method='uniform')
         sampled_indices = sampler.get_selected_samples()
         ## QUESTION: for the test_indices, should we also include the rest of the training nodes? (the ones that were not sampled for training)
@@ -136,3 +136,8 @@ if __name__ == "__main__":
                     # print(f'Epoch: {epoch}, Loss: {round(loss_val, 4)}')
             results_dict[seed][subgroup] = test(data, test_indices, model, subgroup, at_k, comb_size, feature_num)
     # save_results(results_dict, dir_path, comb_size, args)
+
+    # with 3 different seeds
+    # TODO: iomplement precision and recall@k
+    # TODO: txt file {subgroup: [missing_features]}
+    # TODO: a function(comb_size) -> test_nodes with corresponding MI scores
