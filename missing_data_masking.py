@@ -4,9 +4,7 @@ from utils import convert_decimal_to_binary
 
 
 class MissingDataMasking:
-    def __init__(self, feature_num, subgroups, config_num, manual=False):
-        np.random.seed(int(config_num))
-        self.seed = int(config_num)
+    def __init__(self, feature_num, subgroups, manual=False):
         self.feature_num = feature_num
         self.subgroups = subgroups
         self.manual = manual
