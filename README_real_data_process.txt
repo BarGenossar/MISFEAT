@@ -25,3 +25,13 @@ python process_real_data.py --file_path "data/loan.csv" --target_col "Loan Statu
 
 ## Output
 The processed dataset is saved as a pickle file in `RealWorldData/<filename>/dataset.pickle`. A descriptive text file (`description.txt`) outlining the preprocessing steps and feature mappings is also saved in the same directory.
+
+
+
+## requirements from Thinh
+Let's assume we have 3 subgroups: g0, g1, g2
+1.  missing g0: {f2, f3}.   impute g0_f2 using (g1_f2 & g2_f2)
+    input: dataframe, missing_dict = {subgroup: [ missing features ]}
+    output: the imputed dataframe
+2.  mean imputation, knn, mode imputation, (mice, if possible)
+    
