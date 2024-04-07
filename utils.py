@@ -115,13 +115,14 @@ def get_comb_size_indices(num_nodes, comb_size, feature_num):
     return comb_size_indices
 
 
-def save_results(test_results, dir_path, comb_size, args):
+def save_results(test_results, dir_path, comb_size_list, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    results_path = dir_path + f'results_comb_size={comb_size}.pkl'
-    final_test_results = comp_ave_results(test_results)
-    with open(results_path, 'wb') as f:
-        pickle.dump(final_test_results, f)
+    for comb_size in comb_size_list:
+        results_path = dir_path + f'results_comb_size={comb_size}.pkl'
+        final_test_results = comp_ave_results(test_results[comb_size])
+        with open(results_path, 'wb') as f:
+            pickle.dump(final_test_results, f)
     save_hyperparams(dir_path, args)
     return
 
@@ -159,11 +160,10 @@ def print_results(results, at_k, comb_size, subgroup):
     return
 
 
-def read_paths(args, data_path=None):
-    if data_path is not None:
-        dataset_path = data_path
-        graph_path = data_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
-        dir_path = data_path.replace('dataset.pkl', '')
+def read_paths(args, dir_path=None):
+    if dir_path is not None:
+        dataset_path = dir_path + 'dataset.pkl'
+        graph_path = dir_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
     else:
         dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
         graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"

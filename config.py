@@ -1,7 +1,7 @@
 
 class LatticeGeneration:
-    formula_idx = 2
-    hyperparams_idx = 2
+    formula_idx = 1
+    hyperparams_idx = 1
     min_k = 1
     within_level_edges = False
     is_hetero = False
@@ -16,7 +16,8 @@ class MissingDataConfig:
 
 class Sampling:
     method= 'random'
-    sampling_ratio = 0.5
+    sampling_ratio = 0.75
+    validation_ratio = 0.2
 
 
 class GNN:
@@ -24,11 +25,11 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 300
+    epochs = 500
     epochs_stable_val = 5
 
 
 class Evaluation:
     at_k = [3, 5, 10]
-    comb_size = 4
+    comb_size_list = [3, 4, 5]
     eval_metrics = ['ndcg', 'hits']
