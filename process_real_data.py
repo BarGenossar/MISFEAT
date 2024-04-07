@@ -9,9 +9,10 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
 class RealWorldDatasetPreprocessor:
-    def __init__(self, file_path, target_col, subgroup_cols, threshold_select_category=0.01):
+    def __init__(self, file_path, target_col, subgroup_cols, threshold_select_category=0.01, num_feature = 1000000):
         self.file_path = file_path
         self.target_col = target_col
+        self.num_feature = num_feature
         self.subgroup_cols = subgroup_cols.split(',')  # Assume subgroup_cols is passed as a comma-separated string
         self.threshold_select_category = threshold_select_category
         self.feature_mapping = {}  # To store the mapping of original to new column names
@@ -70,15 +71,16 @@ class RealWorldDatasetPreprocessor:
         new_order = other_cols + ['y', 'subgroup']
         df = df[new_order]
         return df
+    
     def sample_data(self, df, num_sample):
         """Sample from the df."""
         sampled_df = df.sample(n=num_sample)
         return sampled_df
     
-    def select_random_features(self, df, k = 10):
+    def select_random_features(self, df):
         features_not_to_discard = [self.target_col] + self.subgroup_cols
         columns_to_consider = [col for col in df.columns if col not in features_not_to_discard]
-        k = min(k, len(columns_to_consider))
+        k = min(self.num_feature, len(columns_to_consider))
         selected_features = np.random.choice(columns_to_consider, size=k, replace=False)
         final_columns = list(features_not_to_discard) + list(selected_features)
         return df[final_columns]
@@ -86,8 +88,8 @@ class RealWorldDatasetPreprocessor:
     def process(self):
         """Process the dataset by encoding, combining, and renaming as specified."""
         df = self.load_data()
-        df = self.select_random_features(df,20)
         df = self.encode_categorical_features(df)
+        df = self.select_random_features(df)
         df = self.combine_subgroup_columns(df)
         df = self.rename_columns(df)
         df = self.rearrange_columns(df)
@@ -134,10 +136,16 @@ def main():
     parser.add_argument('--target_col', type=str, help='Name of the target column.')
     parser.add_argument('--subgroup_cols', type=str, help='Comma-separated list of subgroup column names.')
     parser.add_argument('--threshold', type=float, default=0.01, help='Threshold to select categorical features.')
+    parser.add_argument('--num_feature', type=int, default=0.01, help='Number of features to select')
     args = parser.parse_args()
-    processor = RealWorldDatasetPreprocessor(file_path=args.file_path, target_col=args.target_col, subgroup_cols=args.subgroup_cols, threshold_select_category=args.threshold)
+    processor = RealWorldDatasetPreprocessor(file_path=args.file_path, target_col=args.target_col, subgroup_cols=args.subgroup_cols, threshold_select_category=args.threshold, num_feature= args.num_feature)
     df_processed = processor.process()
     processor.save(df_processed)
 
 if __name__ == '__main__':
     main()
+
+
+#example
+# python process_real_data.py --file_path "data/startup.csv" --target_col "status" --subgroup_cols "is_CA,is_NY,is_MA,is_TX,is_otherstate" --threshold 0.2 --num_feature 10
+# python process_real_data.py --file_path "data/loan.csv" --target_col "Loan Status" --subgroup_cols "Grade" --threshold 0.2 --num_feature 10
