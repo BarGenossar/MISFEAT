@@ -56,7 +56,8 @@ def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            g_results = eval_func[metric](ground_truth, k, sorted_gt_indices, sorted_pred_indices, g_results)
+            g_results = eval_func[metric](ground_truth, predictions, k, sorted_gt_indices,
+                                          sorted_pred_indices, g_results)
     return g_results
 
 
@@ -69,8 +70,8 @@ def verify_at_k(at_k):
 def get_eval_metric_func():
     # TODO: Consider adding more evaluation metrics
     eval_metric_func = {
-        'ndcg': compute_ndcg,
-        'hits': compute_hits,
+        'NDCG': compute_ndcg,
+        'HITS': compute_hits,
         'MAE': compute_MAE
     }
     return Evaluation.eval_metrics, eval_metric_func
@@ -88,21 +89,24 @@ def compute_dcg(ground_truth, sorted_indices, at_k):
     return DCG
 
 
-def compute_ndcg(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
     DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
-    results['ndcg'][k] = round(DCG / IDCG, 4)
+    results['NDCG'][k] = round(DCG / IDCG, 4)
     return results
 
 
-def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_hits(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     hits = sum([1 for i in range(min(k, len(sorted_pred_indices))) if sorted_pred_indices[i] in sorted_gt_indices[:k]])
-    results['hits'][k] = round(hits / k, 4)
+    results['HITS'][k] = round(hits / k, 4)
     return results
 
 
-def compute_MAE(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
-    # TODO: Implement Mean Absolute Error
+def compute_MAE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+    # Implement normalized MAE, such that the difference is divided by the maximum possible difference
+    MAE = sum([abs(ground_truth[sorted_gt_indices[i]] -
+                   predictions[sorted_gt_indices[i]]) for i in range(k)])
+    results['MAE'][k] = round(MAE.item() / k, 4)
     pass
 
 
