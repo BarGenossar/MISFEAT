@@ -12,11 +12,11 @@ warnings.filterwarnings('ignore')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def get_pipeline_obj(args):
+def get_pipeline_obj(args, dir_path):
     pipeline_obj = None
     if args.load_model:
         try:
-            with open(f"{args.dir_path}missing_data_indices.pkl", 'rb') as f:
+            with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
                 missing_indices_dict = pickle.load(f)
                 pipeline_obj = PipelineManager(args, missing_indices_dict)
         except FileNotFoundError:
@@ -190,13 +190,13 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=False)
+    parser.add_argument('--load_model', type=bool, default=True)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('-dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)
-    pipeline_obj = get_pipeline_obj(args)
+    pipeline_obj = get_pipeline_obj(args, dir_path)
     subgroups = pipeline_obj.lattice_graph.x_dict.keys()
     results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
                                 for seed in range(1, seeds_num + 1)} for comb_size in args.comb_size_list}
