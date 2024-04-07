@@ -19,28 +19,19 @@ class RealWorldDatasetPreprocessor:
     def load_data(self):
         """Load data from a CSV file."""
         return pd.read_csv(self.file_path)
-    
-    def sample_data(self, df, num_sample):
-        """Sample from the df."""
-        sampled_df = df.sample(n=num_sample)
-        return sampled_df
-
-
-    def select_random_features(df, k):
-        features_not_to_discard = {'y','subgroup'}
-        columns_to_consider = [col for col in df.columns if col not in features_not_to_discard]
-        k = min(k, len(columns_to_consider))
-        selected_features = np.random.choice(columns_to_consider, size=k, replace=False)
-        final_columns = list(features_not_to_discard) + list(selected_features)
-        return df[final_columns]
 
     def encode_categorical_features(self, df):
-        """Encode categorical features based on a uniqueness threshold."""
+        """Encode categorical features based on a uniqueness threshold and remove non-categorical features."""
         le = LabelEncoder()
-        numberOfrows = df.shape[0]
+        categorical_features = []
+        #print("th = ",df.shape[0] * self.threshold_select_category)
         for col in df.columns:
-            if len(set(df[col])) < numberOfrows * self.threshold_select_category:
-                df[col] = le.fit_transform(df[col].astype(str))
+            if len(set(df[col])) <= df.shape[0] * self.threshold_select_category:
+                categorical_features.append(col)
+        df = df[categorical_features]
+        for col in categorical_features:
+            df.loc[:, col] = le.fit_transform(df[col].astype(str))
+        #print(df.head())
         return df
 
     def combine_subgroup_columns(self, df):
@@ -56,27 +47,50 @@ class RealWorldDatasetPreprocessor:
         """Rename columns, preserving the target column and the new 'subgroup' column."""
         column_mapping = {}
         self.feature_mapping = {}  # Reset feature mapping for each process call
-        for i, col in enumerate(df.columns):
+        #print(df.columns)
+        count = 0
+        for  col in df.columns:
+            
             if col == self.target_col:
                 column_mapping[col] = 'y'
                 self.feature_mapping['y'] = self.target_col
             elif col == 'subgroup':
                 self.feature_mapping['subgroup'] = "Combined: " + ", ".join(self.subgroup_cols)
             else:
-                new_col_name = f'f_{i}'
+                #print(count)
+                new_col_name = f'f_{count}'
                 column_mapping[col] = new_col_name
                 self.feature_mapping[new_col_name] = col
+                count = count + 1
         df = df.rename(columns=column_mapping)
         return df
 
+    def rearrange_columns(self,df):
+        other_cols = [col for col in df.columns if col not in ['y', 'subgroup']]
+        new_order = other_cols + ['y', 'subgroup']
+        df = df[new_order]
+        return df
+    def sample_data(self, df, num_sample):
+        """Sample from the df."""
+        sampled_df = df.sample(n=num_sample)
+        return sampled_df
+    
+    def select_random_features(self, df, k = 10):
+        features_not_to_discard = [self.target_col] + self.subgroup_cols
+        columns_to_consider = [col for col in df.columns if col not in features_not_to_discard]
+        k = min(k, len(columns_to_consider))
+        selected_features = np.random.choice(columns_to_consider, size=k, replace=False)
+        final_columns = list(features_not_to_discard) + list(selected_features)
+        return df[final_columns]
+    
     def process(self):
         """Process the dataset by encoding, combining, and renaming as specified."""
         df = self.load_data()
+        df = self.select_random_features(df,20)
         df = self.encode_categorical_features(df)
         df = self.combine_subgroup_columns(df)
         df = self.rename_columns(df)
-        df = self.sample_data(df, 10000)
-        df = select_random_features(df,10)
+        df = self.rearrange_columns(df)
         return df
     
     def save(self, df):
