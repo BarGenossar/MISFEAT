@@ -211,8 +211,8 @@ if __name__ == "__main__":
 
     if args.dataset_path is None:
         # For synthetic datasets
-        # dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-        dataset_path = f"RealWorldData/{args.dataset_name}/dataset.pkl"
+        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+        # dataset_path = f"RealWorldData/{args.dataset_name}/dataset.pkl"
     else:
         # For real-world datasets
         dataset_path = args.dataset_path

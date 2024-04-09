@@ -197,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--load_model', type=bool, default=True)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('-dir_path', type=str, default=None, help='path to the directory file')
+    parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)
