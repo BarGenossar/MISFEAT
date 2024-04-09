@@ -6,16 +6,18 @@ class LatticeGeneration:
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
+    num_workers = 5  # Number of workers for multiprocessing
 
 
 class MissingDataConfig:
-    general_missing_prob = 0.33
+    general_missing_prob = 0.1
     missing_rate_dict = {'relevant': 0.2, 'correlated': 0.2, 'redundant': 0.2, 'noisy': 0.2}
 
 
 class Sampling:
-    method= 'uniform'
-    sampling_ratio = 0.5
+    method= 'random'
+    sampling_ratio = 0.75
+    validation_ratio = 0.2
 
 
 class GNN:
@@ -23,11 +25,11 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 300
+    epochs = 500
+    epochs_stable_val = 5
 
 
 class Evaluation:
     at_k = [3, 5, 10]
-    comb_size = 4
-    eval_metrics = ['ndcg', 'hits']
-
+    comb_size_list = [3, 4, 5]
+    eval_metrics = ['NDCG', 'PRECISION', 'RMSE']

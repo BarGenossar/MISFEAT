@@ -4,12 +4,13 @@ from utils import convert_decimal_to_binary
 
 
 class MissingDataMasking:
-    def __init__(self, feature_num, subgroups, manual=False):
+    def __init__(self, feature_num, subgroups, config_num, manual=False):
+        np.random.seed(config_num)
+        self.seed = config_num
         self.feature_num = feature_num
         self.subgroups = subgroups
         self.manual = manual
         self.general_missing_prob = MissingDataConfig.general_missing_prob
-        # TODO: Add missing_rate_dict
         self.missing_indices_dict = self._set_missing_indices_dict()
 
     def _set_missing_indices_dict(self):

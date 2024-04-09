@@ -22,14 +22,25 @@ def convert_decimal_to_binary(decimal, feature_num):
     binary = bin(decimal)[2:]
     return '0' * (feature_num - len(binary)) + binary
 
-def get_comb_size_indices(missing_indices_dict, subgroup, comb_size, feature_num):
+
+def convert_binary_to_tuple(binary):
+    combination = []
+    for pos, bit in enumerate(binary[::-1]):
+        if bit == '1':  combination.append(f'f_{pos}')
+    return tuple(combination)
+
+
+
+def get_test_nodes(missing_indices_dict, subgroup, comb_size, feature_num):
     all_test_node_indices = missing_indices_dict[subgroup]['all']
-    comb_size_indices = []
+    node_tuples = []
+    node_indices = []
     for idx in all_test_node_indices:
         binary_vec = convert_decimal_to_binary(idx + 1, feature_num)
         if binary_vec.count('1') == comb_size:
-            comb_size_indices.append(idx)
-    return comb_size_indices
+            node_tuples.append(convert_binary_to_tuple(binary_vec))
+            node_indices.append(idx)
+    return node_tuples, node_indices
 
 
 if __name__ == "__main__":
@@ -38,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument('--sampling_ratio', type=float, default=0.33)
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
-    parser.add_argument('--comb_size', type=int, default=Evaluation.comb_size)
+    parser.add_argument('--comb_size', type=int, default=3)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--workers', default=8, type=int, help="number of parallel workers")
     args = parser.parse_args()
@@ -75,14 +86,16 @@ if __name__ == "__main__":
         model = None
         for subgroup in subgroups:
             ## get `indices of all test nodes` of the given `args.comb_size`
-            comb_size_indices = get_comb_size_indices(missing_indices_dict, subgroup, args.comb_size, feature_num)
-            scores = list(map(lambda idx: data[subgroup].y[idx], comb_size_indices))   # this is MI score of the test nodes
+            node_tuples, node_indices = get_test_nodes(missing_indices_dict, subgroup, args.comb_size, feature_num)
+            scores = list(map(lambda idx: data[subgroup].y[idx].item(), node_indices))   # this is MI score of the test nodes
+
+            for tup, score in zip(node_tuples, scores):
+                print(tup, score)
+
 
             # results_dict[seed][subgroup] = test(data, test_indices, model, subgroup, args.at_k, comb_size, feature_num)
     # save_results(results_dict, dir_path, comb_size, args)
 
-    # with 3 different seeds
-    # TODO: iomplement precision and recall@k
     # TODO (done): txt file {subgroup: [missing_features]}
     # TODO (done): a function(comb_size) -> test_nodes with corresponding MI scores
 

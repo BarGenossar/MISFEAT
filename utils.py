@@ -1,10 +1,10 @@
+import os
 import math
 import torch
-from config import Evaluation
-import os
+import random
 import pickle
 import numpy as np
-import random
+from config import Evaluation
 
 
 def convert_binary_to_decimal(binary):
@@ -51,13 +51,13 @@ def read_feature_num_from_txt(dataset_path):
 
 def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
     eval_metrics, eval_func = get_eval_metric_func()
-    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)    # test nodes with the given comb_size
+    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
     sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
     sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            g_results = eval_func[metric](ground_truth, k, sorted_gt_indices, sorted_pred_indices, g_results)
+            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, g_results)
     return g_results
 
 
@@ -70,9 +70,9 @@ def verify_at_k(at_k):
 def get_eval_metric_func():
     # TODO: Consider adding more evaluation metrics
     eval_metric_func = {
-        'ndcg': compute_ndcg,
-        'hits': compute_hits,
-        'MAE': compute_MAE
+        'NDCG': compute_ndcg,
+        'PRECISION': compute_precision,
+        'RMSE': compute_RMSE
     }
     return Evaluation.eval_metrics, eval_metric_func
 
@@ -84,26 +84,27 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 
 def compute_dcg(ground_truth, sorted_indices, at_k):
     DCG = 0
-    for i in range(1, at_k + 1):
+    for i in range(1, min(at_k + 1, len(sorted_indices))):
         DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
     return DCG
 
 
-def compute_ndcg(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
     DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
-    results['ndcg'][k] = round(DCG / IDCG, 4)
-    return results
+    results['NDCG'][k] = round(DCG / IDCG, 4)
 
 
-def compute_hits(ground_truth, k, sorted_gt_indices, sorted_pred_indices, results):
-    hits = sum([1 for i in range(k) if sorted_pred_indices[i] in sorted_gt_indices[:k]])
-    results['hits'][k] = round(hits / k, 4)
-    return results
+def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+    precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
+    results['PRECISION'][k] = round(precision / k, 4)
 
 
-def compute_MAE(ground_truth, preds):
-    return 1 / len(preds) * sum(abs(ground_truth - preds))
+def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+    # Implement normalized MAE, such that the difference is divided by the maximum possible difference
+    rmse = sum([(ground_truth[sorted_gt_indices[i]] -
+                   predictions[sorted_gt_indices[i]])**2 for i in range(k)])
+    results['RMSE'][k] = round(math.sqrt(rmse.item() / k), 4)
 
 
 def get_comb_size_indices(num_nodes, comb_size, feature_num):
@@ -115,21 +116,25 @@ def get_comb_size_indices(num_nodes, comb_size, feature_num):
     return comb_size_indices
 
 
-def save_results(test_results, dir_path, comb_size, args):
+def save_results(test_results, dir_path, comb_size_list, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    results_path = dir_path + f'results_comb_size={comb_size}.pkl'
-    final_test_results = comp_ave_results(test_results)
-    with open(results_path, 'wb') as f:
-        pickle.dump(final_test_results, f)
+    for comb_size in comb_size_list:
+        results_path = dir_path + f'results_comb_size={comb_size}.pkl'
+        final_test_results = comp_ave_results(test_results[comb_size])
+        with open(results_path, 'wb') as f:
+            pickle.dump(final_test_results, f)
     save_hyperparams(dir_path, args)
     return
 
 
 def comp_ave_results(results_dict):
-    subgroup_list = list(results_dict[1].keys())
-    eval_metrics = list(results_dict[1][subgroup_list[0]].keys())
-    at_k = list(results_dict[1][subgroup_list[0]][eval_metrics[0]].keys())
+    for seed in results_dict.keys():
+        idx = seed  # Just to get the first seed in case the seed is not 1
+        break
+    subgroup_list = list(results_dict[idx].keys())
+    eval_metrics = list(results_dict[idx][subgroup_list[0]].keys())
+    at_k = list(results_dict[idx][subgroup_list[0]][eval_metrics[0]].keys())
     final_results = {subgroup: {metric: {k: round(np.mean([results_dict[seed][subgroup][metric][k]
                                                            for seed in results_dict]), 4) for k in at_k}
                                 for metric in eval_metrics} for subgroup in subgroup_list}
@@ -156,11 +161,10 @@ def print_results(results, at_k, comb_size, subgroup):
     return
 
 
-def read_paths(args, data_path=None):
-    if data_path is not None:
-        dataset_path = data_path
-        graph_path = data_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
-        dir_path = data_path.replace('dataset.pkl', '')
+def read_paths(args, dir_path=None):
+    if dir_path is not None:
+        dataset_path = dir_path + 'dataset.pkl'
+        graph_path = dir_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
     else:
         dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
         graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
