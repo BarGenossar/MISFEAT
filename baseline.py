@@ -66,13 +66,11 @@ def get_feature_importance(df_subgroup: pd.DataFrame, combinations: t.List[t.Tup
     df_subgroup = df_subgroup.astype(str)
     # TODO: create new dataframe with new columns as combinations
     # run random forest and get feature importance
-    all_new_series = []
+    new_df = [df_subgroup['y']]
     for comb in combinations:
         new_series = df_subgroup[list(comb)].apply(lambda x: ''.join(x), axis=1)
-        all_new_series.append(new_series)
-    all_new_series = pd.concat(all_new_series, axis=1)
-    print(all_new_series)
-    exit()
+        new_df.append(new_series)
+    new_df = pd.concat(new_df, axis=1)
 
     #     score = mutual_info_score(comb_series, df_subgroup['y'])  # TODO: replace this line with Random Forest to compute feature importance
     #     scores.append(round(score, 5))

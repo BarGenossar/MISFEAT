@@ -1,0 +1,15 @@
+Feature mappings and dataset details.
+feature_num': 10
+Number of unique categories in 'subgroup': 7
+y: Loan Status
+f_0: Application Type
+f_1: Last week Pay
+f_2: Total Accounts
+f_3: Open Account
+f_4: Public Record
+f_5: Payment Plan
+f_6: Delinquency - two years
+f_7: Sub Grade
+f_8: Employment Duration
+f_9: Inquires - six months
+subgroup: Combined: Grade
