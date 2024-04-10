@@ -9,7 +9,7 @@ class NodeSampler:
         self.feature_num = feature_num
         self.missing_indices_dict = missing_indices_dict
         self.sampling_ratio = sampling_ratio
-        self.sampling_method = sampling_method
+        self.sampling_method = 'random' if self.sampling_ratio == 1 else sampling_method
         self.selected_samples = self._get_selected_samples()
 
     def _get_selected_samples(self):

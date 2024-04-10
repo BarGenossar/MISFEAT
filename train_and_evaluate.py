@@ -64,8 +64,8 @@ class PipelineManager:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
 
-    def _init_model_optim(self, seed):
-        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, seed, self.args.num_layers,
+    def _init_model_optim(self):
+        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers,
                            self.args.p_dropout)
         model = to_hetero(model, self.lattice_graph.metadata())
         model.to(device)
@@ -83,8 +83,8 @@ class PipelineManager:
         labels = self.lattice_graph[subgroup].y[test_indices]
         predictions = out[subgroup][test_indices]
         tmp_results_dict = compute_eval_metrics(labels, predictions, self.at_k, comb_size, self.feature_num)
-        # if show_results:
-        print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
+        if show_results:
+            print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
     def _train_validation_split(self):
@@ -145,12 +145,11 @@ class PipelineManager:
         return best_val, no_impr_counter
 
     def train_model(self, seed):
-        torch.manual_seed(seed)
         criterion = torch.nn.MSELoss()
         self.lattice_graph.to(device)
         for subgroup in self.subgroups:
             print(f"\nTraining on subgroup {subgroup}...")
-            model, optimizer = self._init_model_optim(seed)
+            model, optimizer = self._init_model_optim()
             train_indices, validation_indices = self.train_idxs_dict[subgroup], self.valid_idxs_dict[subgroup]
             no_impr_counter = 0
             epochs_stable_val = GNN.epochs_stable_val
@@ -195,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=True)
+    parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
@@ -207,9 +206,10 @@ if __name__ == "__main__":
                                 for seed in range(1, seeds_num + 1)} for comb_size in args.comb_size_list}
 
     for seed in range(1, seeds_num + 1):
+        set_seed(seed)
         if not args.load_model or pipeline_obj.model_not_found(seed):
             print(f"Seed: {seed}\n=============================")
             pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
-    save_results(results_dict, pipeline_obj.dir_path, args.comb_size_list, args)
+    save_results(results_dict, dir_path, args.comb_size_list, args)

@@ -4,7 +4,7 @@ import typing as t
 import numpy as np
 import pandas as pd
 from itertools import combinations
-from fancyimpute import IterativeImputer
+# from fancyimpute import IterativeImputer
 from sklearn.metrics import mutual_info_score
 from sklearn.impute import SimpleImputer, KNNImputer
 
@@ -80,9 +80,9 @@ def get_feature_importance(df_subgroup: pd.DataFrame, combinations: t.List[t.Tup
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Baseline experiments')
     parser.add_argument('--data_name', type=str, default='loan', help='name of the dataset')
-    parser.add_argument('--imputation_method', type=str, default='KNN', choices=['mode', 'KNN', 'MICE'],
+    parser.add_argument('--imputation_method', type=str, default='mode', choices=['mode', 'KNN', 'MICE'],
                         help='Imputation method to use: mode, KNN, or MICE. Default is mode.')
-    parser.add_argument('--comb_size', type=int, default=1, help='combination size to be tested')
+    parser.add_argument('--comb_size', type=int, default=2, help='combination size to be tested')
     args = parser.parse_args()
 
     df_true = pd.read_pickle(f'./RealWorldData/{args.data_name}/dataset.pkl')
@@ -115,8 +115,7 @@ if __name__ == '__main__':
             base_features.append(feat)
 
         subgroup_combs = list(set(subgroup_combs))   # remove duplicates
-        results[subgroup]['true'] = get_feature_importance(df_true[df_true.subgroup == g_id], subgroup_combs)
-        # results[subgroup]['true'] = get_mi_score(df_true[df_true.subgroup == g_id], subgroup_combs)
+        results[subgroup]['true'] = get_mi_score(df_true[df_true.subgroup == g_id], subgroup_combs)
         # results[subgroup]['miss'] = get_mi_score(df_miss[df_miss.subgroup == g_id], subgroup_combs)
 
     print(results)

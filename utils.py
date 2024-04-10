@@ -120,7 +120,7 @@ def save_results(test_results, dir_path, comb_size_list, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     for comb_size in comb_size_list:
-        results_path = dir_path + f'results_comb_size={comb_size}.pkl'
+        results_path = dir_path + f'results_size={comb_size}_sampling={args.sampling_ratio}.pkl'
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
