@@ -198,6 +198,18 @@ if __name__ == "__main__":
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
+
+
+    DEBUG = True
+
+
+    if DEBUG:
+        args_seeds_num = 1
+        args.epochs = 5
+        args.sampling_ratio = 0.1
+        args.display = True
+        args.save_model = False
+
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)
     pipeline_obj = get_pipeline_obj(args, dir_path)
@@ -212,4 +224,6 @@ if __name__ == "__main__":
             pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
-    save_results(results_dict, dir_path, args.comb_size_list, args)
+
+    if not DEBUG:
+        save_results(results_dict, dir_path, args.comb_size_list, args)

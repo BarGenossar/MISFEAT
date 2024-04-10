@@ -71,7 +71,7 @@ def get_eval_metric_func():
     # TODO: Consider adding more evaluation metrics
     eval_metric_func = {
         'NDCG': compute_ndcg,
-        'PRECISION': compute_precision,
+        'PREC': compute_precision,
         'RMSE': compute_RMSE
     }
     return Evaluation.eval_metrics, eval_metric_func
@@ -97,7 +97,7 @@ def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_in
 
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
-    results['PRECISION'][k] = round(precision / k, 4)
+    results['PREC'][k] = round(precision / k, 4)
 
 
 def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):

@@ -25,13 +25,24 @@ if __name__ == "__main__":
                 NDCG += results[subgroup]['NDCG'][at_k]
                 PREC += results[subgroup]['PRECISION'][at_k]
                 RMSE += results[subgroup]['RMSE'][at_k]
-            # print(f"NDCG@{at_k} = {NDCG/num_subgroups}")
-            # print(f"PREC@{at_k} = {PREC/num_subgroups}")
-            # print(f"RMSE@{at_k} = {RMSE/num_subgroups}")
+                
+            print(f"NDCG@{at_k} = {NDCG/num_subgroups}")
+            print(f"PREC@{at_k} = {PREC/num_subgroups}")
+            print(f"RMSE@{at_k} = {RMSE/num_subgroups}")
 
             scores[sampling_ratio][at_k]['NDCG'] = NDCG/num_subgroups
             scores[sampling_ratio][at_k]['PREC'] = PREC/num_subgroups
             scores[sampling_ratio][at_k]['RMSE'] = RMSE/num_subgroups
 
-    print(scores)
+    # at_k = 3
+    # prec = []
+    # for r in ratios:
+    #     prec.append(scores[r][at_k]['PREC'])
+
+    # plt.plot(ratios, prec)
+    # plt.xlim([0, 1])
+    # plt.ylim([0, 1])
+    # plt.show()
+
+    
     
