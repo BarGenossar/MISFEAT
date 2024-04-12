@@ -1,51 +1,72 @@
 import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.neighbors import KDTree
+from sklearn.impute import SimpleImputer
+from sklearn.neighbors import NearestNeighbors
+from scipy.stats import mode
+import warnings
+
 
 class CustomKNNImputer(BaseEstimator, TransformerMixin):
-    def __init__(self, n_neighbors=5):
+    def __init__(self, n_neighbors=3):
         self.n_neighbors = n_neighbors
+        warnings.filterwarnings('ignore')  # Optionally ignore warnings
 
     def fit(self, X, y=None):
-        self.X_filled = X.reset_index(drop=True)
+        # Impute missing values using the most frequent value
+        self.imputer = SimpleImputer(strategy='most_frequent')
+        self.data_encoded = pd.DataFrame(self.imputer.fit_transform(X), columns=X.columns)
+        
+        # Build NearestNeighbors using the Hamming distance
+        self.nn = NearestNeighbors(n_neighbors=self.n_neighbors, metric='hamming', algorithm='ball_tree')
+        self.nn.fit(self.data_encoded)
         return self
 
-    def _hamming_distance(self, row, other_rows):
-        distances = np.zeros(len(other_rows))
-        for i, other_row in enumerate(other_rows.itertuples(index=False, name=None)):
-            valid_cols = ~np.isnan(np.array(row)) & ~np.isnan(np.array(other_row))
-            if not valid_cols.any():
-                distances[i] = 0
-            else:
-                hamming_dist = np.sum(np.array(row)[valid_cols] != np.array(other_row)[valid_cols])
-                distances[i] = hamming_dist / valid_cols.sum()
-        return distances
-
     def transform(self, X, y=None):
-        X_imputed = X.copy()
-        for i, row in X_imputed.iterrows():
-            if row.isnull().any():
-                dists = self._hamming_distance(row.values, self.X_filled)
-                nn_indices = np.argsort(dists)[:self.n_neighbors]
-                for col in row[row.isnull()].index:
-                    nn_cats = self.X_filled.iloc[nn_indices][col].dropna()
-                    if not nn_cats.empty:
-                        imputed_val = nn_cats.value_counts().idxmax()
-                        X_imputed.at[i, col] = imputed_val
-        return X_imputed
+        # Transform and impute the incoming data
+        data_encoded = pd.DataFrame(self.imputer.transform(X), columns=X.columns)
+        
+        # Iterate through each column and replace missing values using KNN
+        for col in data_encoded.columns:
+            missing_indices = data_encoded[col].isnull()  # Identifying missing indices
+            if not missing_indices.any():
+                continue
+            
+            X_missing = data_encoded.loc[missing_indices]
+            # Ensure the data structure is appropriate for querying
+            if X_missing.ndim == 1:
+                X_missing = X_missing.values.reshape(1, -1)
+
+            # Get indices of neighbors for all missing data points
+            neighbors = self.nn.kneighbors(X_missing, return_distance=False)
+            
+            # Compute mode of the nearest neighbors' categories
+            neighbor_data = self.data_encoded.iloc[neighbors.flatten(), data_encoded.columns.get_loc(col)]
+            y_imputed, _ = mode(neighbor_data, axis=0)
+            y_imputed = y_imputed.mode[0] if y_imputed.size else data_encoded[col].mode()[0]
+
+            # Replace missing values with the computed mode
+            data_encoded.loc[missing_indices, col] = y_imputed
+
+        return data_encoded
+
+    def fit_transform(self, X, y=None):
+        return self.fit(X).transform(X)
+    
 
 # Sample data creation
-data = pd.DataFrame({
-    'Feature1': [1, 2, 0, 1, 2, np.nan, 0, 1],
-    'Feature2': [np.nan, 1, 0, 1, np.nan, 0, 1, 0]
-})
+# data = pd.DataFrame({
+#     'Feature1': [1, 2, 0, 1, 2, np.nan, 0, 1],
+#     'Feature2': [np.nan, 1, 0, 1, np.nan, 0, 1, 0]
+# })
 
-print("Original Data:")
-print(data)
+# print("Original Data:")
+# print(data)
 
-# Initialize and use the CustomKNNImputer
-imputer = CustomKNNImputer(n_neighbors=5)
-imputed_data = imputer.fit_transform(data)
+# # Initialize and use the CustomKNNImputer
+# imputer = CustomKNNImputer(n_neighbors=5)
+# imputed_data = imputer.fit_transform(data)
 
-print("\nImputed Data:")
-print(imputed_data)
+# print("\nImputed Data:")
+# print(imputed_data)

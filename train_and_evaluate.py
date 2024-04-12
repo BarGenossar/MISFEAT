@@ -79,7 +79,7 @@ class PipelineManager:
     def test_subgroup(self, subgroup, comb_size, show_results=True):
         test_indices = self.test_indices[subgroup]
         self.lattice_graph.to(device)
-        model = torch.load(f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt")
+        model = torch.load(f"{self.dir_path}{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_{subgroup}.pt")
         model.to(device)
         model.eval()
         with torch.no_grad():
@@ -87,8 +87,8 @@ class PipelineManager:
         labels = self.lattice_graph[subgroup].y[test_indices]
         predictions = out[subgroup][test_indices]
         tmp_results_dict = compute_eval_metrics(labels, predictions, self.at_k, comb_size, self.feature_num)
-        # if show_results:
-        #     print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
+        if show_results:
+            print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
     def _train_validation_split(self):
@@ -115,6 +115,7 @@ class PipelineManager:
         for subgroup in self.subgroups:
             test_idxs_dict[subgroup] = [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                         self.train_idxs_dict[subgroup] and idx not in self.valid_idxs_dict[subgroup]]
+            # test_idx_dict[subgroup] = 
         return test_idxs_dict
 
     def _run_training_epoch(self, train_indices, model, subgroup, optimizer, criterion):
@@ -175,7 +176,7 @@ class PipelineManager:
 
     def model_not_found(self, seed):
         for subgroup in self.subgroups:
-            path = f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt"
+            path = f"{self.dir_path}{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_{subgroup}.pt"
             if not os.path.exists(path):
                 return True
         return False

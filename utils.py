@@ -57,7 +57,7 @@ def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices)
+            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, g_results)
     return g_results
 
 
@@ -85,13 +85,14 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 def compute_dcg(ground_truth, sorted_indices, at_k):
     DCG = 0
     for i in range(1, min(at_k + 1, len(sorted_indices))):
-        DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
+        DCG += ground_truth[sorted_indices[i-1]].item() / math.log2(i+1)
+        # DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
     return DCG
 
 
 def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
-    DCG = compute_dcg(predictions, sorted_pred_indices, k)
+    DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
     results['NDCG'][k] = round(DCG / IDCG, 4)
 
 

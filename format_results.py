@@ -1,17 +1,32 @@
+import argparse
 import pickle
 import matplotlib.pyplot as plt
 
-path = './RealWorldData/loan'
-comb_size = 5
+
+
+
+def parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_name', type=str, default='loan', help="name of dataset")
+    parser.add_argument('--comb_size', type=int, default=3, help="combination size")
+    # parser.add_argument('', type=, default=, help="")
+    args = parser.parse_args()
+    return args
+
 
 
 if __name__ == "__main__":
+    args = parser()
+    path = f'./RealWorldData/{args.data_name}'
+
+
     metrics = ['NDCG', 'PREC', 'RMSE']
-    ratios = [0.25, 0.5, 0.75]
+    ratios = [0.25, 0.5, 0.75, 1.0]
     scores = {sampling_ratio: {k: {metric: 0. for metric in metrics} for k in [3, 5, 10]} for sampling_ratio in ratios}
     
     for sampling_ratio in ratios:
-        with open(f'{path}/results_size={comb_size}_sampling={sampling_ratio}.pkl', 'rb') as f:
+        print(f'ratio: {sampling_ratio}, comb_size: {args.comb_size}')
+        with open(f'{path}results_size={args.comb_size}_sampling={sampling_ratio}.pkl', 'rb') as f:
             results = pickle.load(f)
 
         # g0 : [NCGD, PREC] : [3, 5, 10]
@@ -21,18 +36,22 @@ if __name__ == "__main__":
             NDCG = 0.
             PREC = 0.
             RMSE = 0.
-            for subgroup in results:
-                NDCG += results[subgroup]['NDCG'][at_k]
-                PREC += results[subgroup]['PRECISION'][at_k]
-                RMSE += results[subgroup]['RMSE'][at_k]
+            # for subgroup in results:
+            for subgroup in ['g0',]:
+                NDCG = results[subgroup]['NDCG'][at_k]
+                PREC = results[subgroup]['PREC'][at_k]
+                RMSE = results[subgroup]['RMSE'][at_k]
                 
-            print(f"NDCG@{at_k} = {NDCG/num_subgroups}")
-            print(f"PREC@{at_k} = {PREC/num_subgroups}")
-            print(f"RMSE@{at_k} = {RMSE/num_subgroups}")
+                # print(f"NDCG@{at_k} for subgroup {subgroup} = {round(NDCG, 2)}")
+                print(f"PREC@{at_k} for subgroup {subgroup} = {round(PREC, 2)}")
+                # print(f"PREC@{at_k} for subgroup {subgroup} = {PREC/num_subgroups}")
+                # print(f"RMSE@{at_k} for subgroup {subgroup} = {RMSE/num_subgroups}")
 
-            scores[sampling_ratio][at_k]['NDCG'] = NDCG/num_subgroups
-            scores[sampling_ratio][at_k]['PREC'] = PREC/num_subgroups
-            scores[sampling_ratio][at_k]['RMSE'] = RMSE/num_subgroups
+            # scores[sampling_ratio][at_k]['NDCG'] = NDCG/num_subgroups
+            # scores[sampling_ratio][at_k]['PREC'] = PREC/num_subgroups
+            # scores[sampling_ratio][at_k]['RMSE'] = RMSE/num_subgroups
+        
+        print()
 
     # at_k = 3
     # prec = []
