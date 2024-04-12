@@ -130,87 +130,6 @@ class RealWorldDatasetPreprocessor:
         print(f"Description saved to {description_file_path}")
 
 
-def preprocess_mobile(data):
-    
-    data['battery_power'] = data['battery_power'].apply(lambda x : 0 if x <= 1000
-                                                        else (1 if 1000 < x <= 1500                                                     
-                                                        else  2))
-
-    data['clock_speed'] = data['clock_speed'].apply(lambda x : 0 if x <= 1 
-                                                    else (1 if 1 < x <= 2                                                        
-                                                    else  2))
-    
-    data['int_memory'] = data['int_memory'].apply(lambda x : 0 if x <= 10
-                                                else (1 if 10 < x <= 20                                                      
-                                                else (2 if 20 < x <= 30
-                                                else (3 if 30 < x <= 40
-                                                else (4 if 40 < x <= 50
-                                                else (5 if 50 < x <= 60
-                                                else  6))))))
-    
-    data['m_dep'] = data['m_dep'].apply(lambda x : 0 if x <= 0.5 
-                                        else 1)
-    
-    data['mobile_wt'] = data['mobile_wt'].apply(lambda x : 0 if x <= 120
-                                                else (1 if 120 < x <= 160                                                      
-                                                else  2))
-
-    data['n_cores'] = data['n_cores'].apply(lambda x : 0 if x <= 2
-                                                else (1 if 2 < x <= 4                                                      
-                                                else (2 if 4 < x <= 6                                                      
-                                                else  3)))
-    
-    data['px_height'] = data['px_height'].apply(lambda x : 0 if x <= 720
-                                                else (1 if 720 < x <= 1080                                                      
-                                                else  2))
-    
-    data['px_width'] = data['px_width'].apply(lambda x : 0 if x <= 1080
-                                              else (1 if 1080 < x <= 1440                                                      
-                                              else  2))
-    
-    data['ram'] = data['ram'].apply(lambda x : 0 if x <= 1024
-                                    else (1 if 1024 < x <= 2048                                                      
-                                    else (2 if 2048 < x <= 3072                                                      
-                                    else  3)))
-
-    data['sc_h'] = data['sc_h'].apply(lambda x : 0 if x <= 12
-                                    else 1)
-    
-    data['sc_w'] = data['sc_w'].apply(lambda x : 0 if x <= 7.2
-                                    else 1)
-
-    data['fc'] = data['fc'].apply(lambda x : 0 if x <= 3.8
-                                  else (1 if 3.8 < x <= 7.6                                                      
-                                  else  2))
-    
-    data['pc'] = data['pc'].apply(lambda x : 0 if x <= 10
-                                  else 1)
-
-    data['talk_time'] = data['talk_time'].apply(lambda x : 0 if x <= 11
-                                                else 1)
-
-    subgroup_dict = {subgroup: i for i, subgroup in enumerate(sorted(set(data['dual_sim'])))}
-    data['dual_sim'] = data['dual_sim'].replace(subgroup_dict)
-
-
-    feature_list = list(data.columns)
-    feature_list.remove('dual_sim')
-    feature_list.remove('price_range')
-
-    feature_dict = {'price_range': 'y',
-                    'dual_sim': 'subgroup'}
-
-    for i, feat in enumerate(feature_list):
-        # count_missing = data[feat].value_counts().get('?')
-        # print(feat, ', num distinct =', len(set(data[feat])), ', missing tuples =', count_missing)
-        feature_dict[feat] = f"f_{i}"
-
-    data = data.rename(columns=feature_dict)
-    data.reset_index(drop=True, inplace=True)
-
-    data.to_pickle('dataset.pkl')
-
-
 def main():
     parser = argparse.ArgumentParser(description='Process a dataset with specified parameters.')
     parser.add_argument('--file_path', type=str, help='Path to the dataset file.')
@@ -221,13 +140,18 @@ def main():
     args = parser.parse_args()
     processor = RealWorldDatasetPreprocessor(file_path=args.file_path, target_col=args.target_col, subgroup_cols=args.subgroup_cols, threshold_select_category=args.threshold, num_feature= args.num_feature)
     df_processed = processor.process()
-    print(df_processed)
+    # print(df_processed)
     drop_columns = []
     for col in df_processed.columns:
-        if len(set(df_processed[col])) > 9 or len(set(df_processed[col])) < 2:
+        if len(set(df_processed[col])) > 8 or len(set(df_processed[col])) < 2:
             drop_columns.append(col)
-            # print(col, set(df_processed[col]))
+
+    drop_columns.extend(['f_0', 'f_4', 'f_13', 'f_14'])
     df_processed.drop(columns=drop_columns, axis=1, inplace=True)
+
+    # for col in df_processed.columns:
+    #     print(col, len(set(df_processed[col])))
+    # exit()
 
     column_mapping = {col: f'f_{idx}' for idx, col in enumerate(list(df_processed.columns)) if 'f_' in col}
     df_processed = df_processed.rename(columns=column_mapping)
@@ -235,9 +159,7 @@ def main():
     processor.save(df_processed)
 
 if __name__ == '__main__':
-    # main()
-
-    preprocess_mobile(pd.read_csv('./data/mobile.csv'))
+    main()
 
 
 #example

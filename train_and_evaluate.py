@@ -1,4 +1,3 @@
-
 import argparse
 from GNN_models import LatticeGNN
 from config import LatticeGeneration, GNN, Sampling
@@ -144,14 +143,14 @@ class PipelineManager:
         if loss_validation < best_val:
             best_val = loss_validation
             no_impr_counter = 0
-            torch.save(model, f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt")
+            torch.save(model, f"{self.dir_path}{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_{subgroup}.pt")
         else:
             no_impr_counter += 1
         return best_val, no_impr_counter
 
     def train_model(self, seed):
         with open(f'{self.dir_path}/missing_seed{seed}.json', 'w') as f:
-                json.dump(self.missing_json, f)
+            json.dump(self.missing_json, f)
 
         criterion = torch.nn.MSELoss()
         self.lattice_graph.to(device)
@@ -208,7 +207,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    DEBUG = True
+    DEBUG = False
 
 
     if DEBUG:

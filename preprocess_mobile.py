@@ -82,8 +82,12 @@ def preprocess_mobile(data):
 
 
 if __name__ == "__main__":
-    data = pd.read_csv('./train.csv')
+    data = pd.read_csv('./data/mobile.csv')
     df = preprocess_mobile(data)
-    # print(data.head(100))
 
-    df.to_csv('mobile_data_processed.csv', index=False)
+    df = df.drop(columns=['f_4', 'f_5', 'f_13', 'f_14'], axis=1)
+    cols = [col for col in df.columns if 'f_' in col]
+    new_names = {col: f'f_{idx}' for idx, col in enumerate(cols)}
+    df = df.rename(columns = new_names)
+
+    df.to_pickle('./RealWorldData/mobile/dataset.pkl')

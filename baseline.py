@@ -1,4 +1,5 @@
 import json
+import math
 import argparse
 import typing as t
 import numpy as np
@@ -7,8 +8,33 @@ from itertools import combinations
 # from fancyimpute import IterativeImputer
 from sklearn.metrics import mutual_info_score
 from sklearn.impute import SimpleImputer, KNNImputer
-from utils import compute_eval_metrics, compute_ndcg, compute_precision, compute_RMSE
 import torch
+
+
+def compute_dcg(ground_truth, sorted_indices, at_k):
+    DCG = 0
+    for i in range(1, min(at_k + 1, len(sorted_indices))):
+        DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
+    return DCG
+
+
+def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+    IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
+    DCG = compute_dcg(predictions, sorted_pred_indices, k)
+    return round(DCG / IDCG, 4)
+
+
+def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+    precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
+    return round(precision / k, 4)
+
+
+def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+    # Implement normalized MAE, such that the difference is divided by the maximum possible difference
+    rmse = sum([(ground_truth[sorted_gt_indices[i]] -
+                   predictions[sorted_gt_indices[i]])**2 for i in range(k)])
+    return round(math.sqrt(rmse.item() / k), 4)
+
 
 
 class DataImputer:
