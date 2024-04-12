@@ -89,22 +89,22 @@ def compute_dcg(ground_truth, sorted_indices, at_k):
     return DCG
 
 
-def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
     DCG = compute_dcg(predictions, sorted_pred_indices, k)
-    return round(DCG / IDCG, 4)
+    results['NDCG'][k] = round(DCG / IDCG, 4)
 
 
-def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
-    return round(precision / k, 4)
+    results['PREC'][k] = round(precision / k, 4)
 
 
-def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
+def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     # Implement normalized MAE, such that the difference is divided by the maximum possible difference
     rmse = sum([(ground_truth[sorted_gt_indices[i]] -
                    predictions[sorted_gt_indices[i]])**2 for i in range(k)])
-    return round(math.sqrt(rmse.item() / k), 4)
+    results['RMSE'][k] = round(math.sqrt(rmse.item() / k), 4)
 
 
 def get_comb_size_indices(num_nodes, comb_size, feature_num):
