@@ -57,7 +57,7 @@ def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, g_results)
+            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices)
     return g_results
 
 
@@ -89,22 +89,22 @@ def compute_dcg(ground_truth, sorted_indices, at_k):
     return DCG
 
 
-def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
-    DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
-    results['NDCG'][k] = round(DCG / IDCG, 4)
+    DCG = compute_dcg(predictions, sorted_pred_indices, k)
+    return round(DCG / IDCG, 4)
 
 
-def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
-    results['PREC'][k] = round(precision / k, 4)
+    return round(precision / k, 4)
 
 
-def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
     # Implement normalized MAE, such that the difference is divided by the maximum possible difference
     rmse = sum([(ground_truth[sorted_gt_indices[i]] -
                    predictions[sorted_gt_indices[i]])**2 for i in range(k)])
-    results['RMSE'][k] = round(math.sqrt(rmse.item() / k), 4)
+    return round(math.sqrt(rmse.item() / k), 4)
 
 
 def get_comb_size_indices(num_nodes, comb_size, feature_num):
@@ -161,15 +161,15 @@ def print_results(results, at_k, comb_size, subgroup):
     return
 
 
-def read_paths(args, dir_path=None):
-    if dir_path is not None:
-        dataset_path = dir_path + 'dataset.pkl'
-        graph_path = dir_path.replace('dataset.pkl', 'dataset_hetero_graph.pt')
+def read_paths(args):
+    if args.dir_path is not None:
+        dataset_path = args.dir_path + 'dataset.pkl'
+        graph_path = os.path.join(args.dir_path, 'dataset_hetero_graph.pt')
     else:
         dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
         graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
         dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
-    return dataset_path, graph_path, dir_path
+    return graph_path
 
 
 def generate_info_string(args, seed):

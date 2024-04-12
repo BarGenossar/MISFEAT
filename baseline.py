@@ -7,6 +7,8 @@ from itertools import combinations
 # from fancyimpute import IterativeImputer
 from sklearn.metrics import mutual_info_score
 from sklearn.impute import SimpleImputer, KNNImputer
+from utils import compute_eval_metrics, compute_ndcg, compute_precision, compute_RMSE
+import torch
 
 
 class DataImputer:
@@ -93,9 +95,9 @@ if __name__ == '__main__':
 
     ## imputation
     df_miss = df_true.copy(deep=True)
-    # imputer = DataImputer(missing_dict, args.imputation_method)
-    # df_miss = imputer.process(df_miss)
-    # df_miss = df_miss.astype(int)
+    imputer = DataImputer(missing_dict, args.imputation_method)
+    df_miss = imputer.process(df_miss)
+    df_miss = df_miss.astype(int)
 
     ## dataframe information
     base_features = [feat for feat in df_true.columns if 'f_' in feat]
@@ -103,7 +105,8 @@ if __name__ == '__main__':
     subgroups = [f'g{g_id}' for g_id in range(len(set(df_true.subgroup)))]
     
     ## get test results
-    results = {subgroup: {} for subgroup in subgroups}
+    mi = {subgroup: {} for subgroup in subgroups}
+    results = {metric: {} for metric in ['NDCG', 'PREC', 'RMSE']}
     for subgroup in subgroups:
         g_id = int(subgroup.split('g')[-1])
         subgroup_combs = []
@@ -115,7 +118,20 @@ if __name__ == '__main__':
             base_features.append(feat)
 
         subgroup_combs = list(set(subgroup_combs))   # remove duplicates
-        results[subgroup]['true'] = get_mi_score(df_true[df_true.subgroup == g_id], subgroup_combs)
-        # results[subgroup]['miss'] = get_mi_score(df_miss[df_miss.subgroup == g_id], subgroup_combs)
+        mi[subgroup]['true'] = get_mi_score(df_true[df_true.subgroup == g_id], subgroup_combs)   # array of MI scores
+        mi[subgroup]['miss'] = get_mi_score(df_miss[df_miss.subgroup == g_id], subgroup_combs)   # array of MI scores
 
-    print(results)
+
+        at_k = 3
+        comb_size = 4
+        
+        true_rank = torch.argsort(torch.tensor(mi[subgroup]['true']), descending=True).tolist()
+        pred_rank = torch.argsort(torch.tensor(mi[subgroup]['miss']), descending=True).tolist()
+        
+        
+        results['NDCG'][at_k] = compute_ndcg(mi[subgroup]['true'], mi[subgroup]['miss'], at_k, true_rank, pred_rank)
+
+        # print(f'subgroup: {subgroup}, at_k: {at_k}, combSize: {comb_size}, nDCG: {results['NDCG'][at_k]}')
+
+
+        # print(subgroup_results)

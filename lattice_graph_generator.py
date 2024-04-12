@@ -4,7 +4,7 @@ from torch_geometric.data import Data, HeteroData
 from itertools import combinations
 import pandas as pd
 from collections import defaultdict
-from sklearn.metrics import mutual_info_score
+from sklearn.metrics import mutual_info_score, normalized_mutual_info_score
 from utils import *
 from config import LatticeGeneration
 import argparse
@@ -30,7 +30,8 @@ class FeatureLatticeGraph:
 
     @staticmethod
     def _read_dataset(dataset_path):
-        return pd.read_pickle(dataset_path)
+        df = pd.read_pickle(dataset_path)
+        return df
 
     def _create_mappings_dict(self):
         """
@@ -64,7 +65,7 @@ class FeatureLatticeGraph:
 
     def _update_mappings_dict(self, g_id, mappings_dict, comb_size, comb, tmp_series, y_series):
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
-        score = mutual_info_score(tmp_series, y_series)
+        score = normalized_mutual_info_score(tmp_series, y_series) + 0.5
         mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
         mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
         mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1

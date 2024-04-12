@@ -8,6 +8,7 @@ from utils import *
 from torch_geometric.nn import to_hetero
 from sklearn.model_selection import train_test_split
 import warnings
+import json
 warnings.filterwarnings('ignore')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,7 +41,8 @@ class PipelineManager:
         self.seeds_num = args.seeds_num
         self.epochs = args.epochs
         self.at_k = verify_at_k(args.at_k)
-        self.dataset_path, self.graph_path, self.dir_path = read_paths(args)
+        self.graph_path = read_paths(args)
+        self.dir_path = args.dir_path
         self.lattice_graph, self.subgroups = self._load_graph_information()
         self.feature_num = int(np.log2(len(self.lattice_graph['g0']['x']) + 1))
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
@@ -60,8 +62,11 @@ class PipelineManager:
         else:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
                                                         self.args.manual_md).missing_indices_dict
+            self.missing_json = { subgroup: [feat for feat in missing_indices_dict[subgroup].keys() if 'f_' in feat] for subgroup in missing_indices_dict.keys() }
+
             with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
+
             return missing_indices_dict
 
     def _init_model_optim(self):
@@ -83,8 +88,8 @@ class PipelineManager:
         labels = self.lattice_graph[subgroup].y[test_indices]
         predictions = out[subgroup][test_indices]
         tmp_results_dict = compute_eval_metrics(labels, predictions, self.at_k, comb_size, self.feature_num)
-        if show_results:
-            print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
+        # if show_results:
+        #     print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
     def _train_validation_split(self):
@@ -145,6 +150,9 @@ class PipelineManager:
         return best_val, no_impr_counter
 
     def train_model(self, seed):
+        with open(f'{self.dir_path}/missing_seed{seed}.json', 'w') as f:
+                json.dump(self.missing_json, f)
+
         criterion = torch.nn.MSELoss()
         self.lattice_graph.to(device)
         for subgroup in self.subgroups:
@@ -206,9 +214,8 @@ if __name__ == "__main__":
     if DEBUG:
         args_seeds_num = 1
         args.epochs = 5
-        args.sampling_ratio = 0.1
         args.display = True
-        args.save_model = False
+        args.save_model = True
 
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)

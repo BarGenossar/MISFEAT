@@ -32,4 +32,4 @@ class GNN:
 class Evaluation:
     at_k = [3, 5, 10]
     comb_size_list = [3, 4, 5]
-    eval_metrics = ['NDCG', 'PRECISION', 'RMSE']
+    eval_metrics = ['NDCG', 'PREC', 'RMSE']
