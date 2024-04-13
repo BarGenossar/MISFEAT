@@ -17,7 +17,7 @@ class MissingDataConfig:
 class Sampling:
     method= 'random'
     sampling_ratio = 0.75
-    validation_ratio = 0.2
+    validation_ratio = 0.1
 
 
 class GNN:
@@ -26,10 +26,10 @@ class GNN:
     num_layers = 2
     p_dropout = 0
     epochs = 500
-    epochs_stable_val = 5
+    epochs_stable_val = 25
 
 
 class Evaluation:
-    at_k = [3, 5, 10]
+    at_k = [5, 10, 20]
     comb_size_list = [3, 4, 5]
     eval_metrics = ['NDCG', 'PREC', 'RMSE']

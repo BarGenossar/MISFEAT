@@ -65,7 +65,8 @@ class FeatureLatticeGraph:
 
     def _update_mappings_dict(self, g_id, mappings_dict, comb_size, comb, tmp_series, y_series):
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
-        score = normalized_mutual_info_score(tmp_series, y_series) + 0.5
+        # score = normalized_mutual_info_score(tmp_series, y_series) + 0.5
+        score = mutual_info_score(tmp_series, y_series)
         mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
         mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
         mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1

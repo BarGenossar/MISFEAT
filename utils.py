@@ -3,8 +3,37 @@ import math
 import torch
 import random
 import pickle
+import typing as t
 import numpy as np
 from config import Evaluation
+from sklearn.metrics import ndcg_score
+
+
+def Kendall_tau(rank_true: t.List[int], rank_pred: t.List[int]) -> int:
+    r"""
+    Compute Kendall tau score: count the number of inversions between two ranked lists
+    Arguments:
+        `rank_true`: ground truth rank
+        `rank_pred`: predicted rank
+        `descending`: rank in descending order, or vice versa
+    Return:
+        Kendall tau score (int)
+    Example:
+        truth = [A, B, C, D]
+        pred  = [C, A, B, D]
+        inversions: BC - CB, AC - CA --> output = 2
+    """
+    n = len(rank_true)
+
+    pred_to_idx = {rank: idx for idx, rank in enumerate(rank_pred)}
+
+    ## iterate each pair and count inversions
+    inversions = 0
+    for i in range(n-1):
+        for j in range(i+1, n):
+            if pred_to_idx[rank_true[i]] > pred_to_idx[rank_true[j]]: inversions += 1
+    return inversions
+
 
 
 def convert_binary_to_decimal(binary):
@@ -49,15 +78,16 @@ def read_feature_num_from_txt(dataset_path):
     return None
 
 
-def compute_eval_metrics(ground_truth, predictions, at_k, comb_size, feature_num):
+def compute_eval_metrics(mi_true, mi_pred, at_k, comb_size, feature_num):
     eval_metrics, eval_func = get_eval_metric_func()
-    comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
-    sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
-    sorted_pred_indices = get_sorted_indices(predictions, comb_size_indices)
+    # comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
+    sorted_list_idx_true = np.argsort(mi_true.cpu().tolist())[::-1]
+    sorted_list_idx_pred = np.argsort(mi_pred.cpu().tolist())[::-1]
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            eval_func[metric](ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, g_results)
+            eval_func[metric](mi_true, mi_pred, k, sorted_list_idx_true, sorted_list_idx_pred, g_results)
+    # g_results['kendall_tau'] = Kendall_tau(sorted_list_idx_true, sorted_list_idx_pred)
     return g_results
 
 
@@ -82,17 +112,40 @@ def get_sorted_indices(score_tensor, comb_size_indices):
     return [idx.item() for idx in sorted_indices if idx.item() in comb_size_indices]
 
 
-def compute_dcg(ground_truth, sorted_indices, at_k):
-    DCG = 0
-    for i in range(1, min(at_k + 1, len(sorted_indices))):
-        DCG += ground_truth[sorted_indices[i-1]].item() / math.log2(i+1)
-        # DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
-    return DCG
+#### Bar's version
+# def compute_dcg(ground_truth, sorted_indices, at_k):
+#     DCG = 0
+#     for i in range(1, min(at_k + 1, len(sorted_indices))):
+#         DCG += ground_truth[sorted_indices[i-1]].item() / math.log2(i+1)
+#         # DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
+#     return DCG
 
 
-def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
-    IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
-    DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
+# def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+#     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
+#     DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
+#     results['NDCG'][k] = round(DCG / IDCG, 4)
+
+
+#### sklearn version
+# def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
+#     relevance = [0] * len(sorted_gt_indices)
+#     for i in range(k): relevance[i] = 1
+#     relevance_pred = [1 if idx in sorted_gt_indices[:k] else 0 for idx in sorted_pred_indices]
+#     results['NDCG'][k] = ndcg_score(np.asarray([relevance]), np.asarray([relevance_pred]))
+
+
+#### Thinh's version
+def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
+    relevance = [0] * len(ground_truth)
+    for i in range(k): relevance[sorted_list_idx_true[i]] = k - i
+    # for i in range(k): relevance[sorted_list_idx_true[i]] = 1
+    DCG = 0.
+    IDCG = 0.
+    for i in range(k):
+        IDCG += (k - i) / math.log(i + 2, 2)
+        # IDCG += 1 / math.log(i + 2, 2)
+        DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
     results['NDCG'][k] = round(DCG / IDCG, 4)
 
 
@@ -108,12 +161,12 @@ def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_in
     results['RMSE'][k] = round(math.sqrt(rmse.item() / k), 4)
 
 
-def get_comb_size_indices(num_nodes, comb_size, feature_num):
+def get_comb_size_indices(node_ids, comb_size, feature_num):
     comb_size_indices = []
-    for i in range(num_nodes):
-        binary_vec = convert_decimal_to_binary(i+1, feature_num)
+    for id in node_ids:
+        binary_vec = convert_decimal_to_binary(id + 1, feature_num)
         if binary_vec.count('1') == comb_size:
-            comb_size_indices.append(i)
+            comb_size_indices.append(id)
     return comb_size_indices
 
 
