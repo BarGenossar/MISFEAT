@@ -173,10 +173,11 @@ class LogicalDatasetGenerator:
         feature_list = [f'f_{i}' for i in range(self.feature_num)]
         for subgroup in range(self.subgroups_num):
             tmp_df = df[df['subgroup'] == subgroup].copy()
-            noise_flip_prob = np.random.normal(random_noise_mean, random_noise_std)
+            subgroup_noise = np.random.normal(random_noise_mean, random_noise_std)
             for feature in feature_list:
-                tmp_df[feature] = np.where(np.random.rand(len(tmp_df)) > noise_flip_prob,
-                                           tmp_df[feature], np.random.choice(self.feature_range))
+                noise_flip_prob = np.random.normal(subgroup_noise, subgroup_noise/2)
+                tmp_df[feature] = tmp_df[feature].apply(lambda x: x if np.random.rand() > noise_flip_prob
+                                                        else np.random.choice(self.feature_range)).astype(int)
             df.loc[tmp_df.index] = tmp_df
         return df
 
@@ -218,7 +219,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
     parser.add_argument('--formula', type=str, default='2', help='Index of the formula to be generated')
-    parser.add_argument('--config', type=str, default='2', help='Index of the configuration to be generated')
+    parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
     args = parser.parse_args()
 
     configs = json.load(open('data_generation_config.json'))
