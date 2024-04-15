@@ -226,7 +226,7 @@ def read_paths(args):
         dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
         graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
         dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
-    return graph_path
+    return dataset_path, graph_path, dir_path
 
 
 def generate_info_string(args, seed):
@@ -256,11 +256,9 @@ def set_seed(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
