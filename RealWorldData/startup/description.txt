@@ -1,0 +1,30 @@
+Feature mappings and dataset details.
+feature_num': 16
+Number of unique categories in 'subgroup': 6
+y: status
+f_0: has_roundB
+f_1: avg_participants
+f_2: is_mobile
+f_3: funding_rounds
+f_4: state_code.1
+f_5: has_roundC
+f_6: is_consulting
+f_7: labels
+f_8: category_code
+f_9: has_roundA
+f_10: is_software
+f_11: has_angel
+f_12: relationships
+f_13: is_enterprise
+f_14: is_top500
+f_15: has_VC
+f_16: milestones
+f_17: has_roundD
+f_18: is_advertising
+f_19: is_web
+f_20: is_gamesvideo
+f_21: is_biotech
+f_22: is_othercategory
+f_23: is_ecommerce
+f_24: state_code
+subgroup: Combined: is_CA, is_NY, is_MA, is_TX, is_otherstate
