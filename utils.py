@@ -57,15 +57,15 @@ def convert_comb_to_binary(comb, feature_num):
     return binary[::-1]
 
 
-def get_lattice_nodes_num(feature_num, min_subset_size, max_subset_size):
-    return sum([math.comb(feature_num, i) for i in range(min_subset_size, max_subset_size + 1)])
+def get_lattice_nodes_num(feature_num, max_subset_size):
+    return sum([math.comb(feature_num, i) for i in range(1, max_subset_size + 1)])
 
 
-def get_lattice_edges_num(feature_num, min_subset_size, max_subset_size, within_levels=True):
-    edges_num = sum([math.comb(feature_num, i) * i for i in range(min_subset_size+1, max_subset_size+1)])
+def get_lattice_edges_num(feature_num, max_subset_size, within_levels=True):
+    edges_num = sum([math.comb(feature_num, i) * i for i in range(2, max_subset_size+1)])
     if within_levels:
         edges_num += sum([math.comb(feature_num, i) * i * (feature_num - i) for i
-                          in range(max(2, min_subset_size), max_subset_size)])
+                          in range(2, max_subset_size)])
     return edges_num
 
 
@@ -86,8 +86,8 @@ def compute_eval_metrics(mi_true, mi_pred, at_k, comb_size, feature_num):
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            eval_func[metric](mi_true, mi_pred, k, sorted_list_idx_true, sorted_list_idx_pred, g_results)
-    # g_results['kendall_tau'] = Kendall_tau(sorted_list_idx_true, sorted_list_idx_pred)
+            g_results = eval_func[metric](mi_true, mi_pred, k, sorted_list_idx_true, sorted_list_idx_pred, g_results)
+    g_results['kendall_tau'] = Kendall_tau(sorted_list_idx_true, sorted_list_idx_pred)
     return g_results
 
 
@@ -149,6 +149,8 @@ def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list
     results['NDCG'][k] = round(DCG / IDCG, 4)
 
 
+
+
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
     results['PREC'][k] = round(precision / k, 4)
@@ -175,6 +177,7 @@ def save_results(test_results, dir_path, comb_size_list, args):
         os.makedirs(dir_path)
     for comb_size in comb_size_list:
         results_path = dir_path + f'results_size={comb_size}_sampling={args.sampling_ratio}.pkl'
+        results_path = dir_path + f'results_comb_size={comb_size}.pkl'
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
@@ -217,7 +220,7 @@ def print_results(results, at_k, comb_size, subgroup):
 
 def read_paths(args):
     if args.dir_path is not None:
-        dataset_path = args.dir_path + 'dataset.pkl'
+        dataset_path = os.path.join(args.dir_path, 'dataset.pkl')
         graph_path = os.path.join(args.dir_path, 'dataset_hetero_graph.pt')
     else:
         dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"

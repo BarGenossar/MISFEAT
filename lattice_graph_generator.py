@@ -17,7 +17,6 @@ warnings.filterwarnings('ignore')
 
 class FeatureLatticeGraph:
     def __init__(self, dataset_path, min_k=1, with_edge_attrs=False):
-        self.min_k = min_k
         self.with_edge_attrs = with_edge_attrs
         self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
@@ -47,7 +46,7 @@ class FeatureLatticeGraph:
         for g_id in range(self.subgroups_num):
             print(f"Generating the mappings dictionary for subgroup {g_id}:\n")
             mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, mappings_dict, dataframe, y_series)
-            for comb_size in range(self.min_k + 1, self.feature_num + 1):
+            for comb_size in range(2, self.feature_num + 1):
                 mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
                                                                                     dataframe, y_series, prev_tmp_dict)
 
@@ -57,8 +56,11 @@ class FeatureLatticeGraph:
         new_tmp_dict = dict()
         mappings_dict[g_id][comb_size] = defaultdict(dict)
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
+        rel_idxs = dataframe[dataframe['subgroup'] == str(g_id)].index
+        y_series = y_series[rel_idxs]
         for comb in tqdm.tqdm(feature_set_combs):
-            tmp_series, new_tmp_dict = self._create_feature_set_col(dataframe, comb, prev_tmp_dict, new_tmp_dict)
+            tmp_series, new_tmp_dict = self._create_feature_set_col(rel_idxs, dataframe, comb,
+                                                                    prev_tmp_dict, new_tmp_dict)
             mappings_dict = self._update_mappings_dict(g_id, mappings_dict, comb_size, comb, tmp_series, y_series)
         prev_tmp_dict = new_tmp_dict.copy()
         return mappings_dict, prev_tmp_dict
@@ -74,19 +76,21 @@ class FeatureLatticeGraph:
 
     def _initialize_tmp_dict(self, g_id, mappings_dict, dataframe, y_series):
         prev_tmp_dict = dict()
-        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_k))
-        mappings_dict[g_id][self.min_k] = defaultdict(dict)
+        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, 1))
+        mappings_dict[g_id][1] = defaultdict(dict)
+        rel_idxs = dataframe[dataframe['subgroup'] == str(g_id)].index
+        y_series = y_series[rel_idxs]
         for comb in feature_set_combs:
-            tmp_series = dataframe[comb[0]]
+            tmp_series = dataframe[comb[0]][rel_idxs]
             for i in range(1, len(comb)):
-                tmp_series = tmp_series + dataframe[comb[i]]
+                tmp_series = tmp_series + dataframe[comb[i]][rel_idxs]
             prev_tmp_dict[comb] = tmp_series.copy()
-            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, self.min_k, comb, tmp_series, y_series)
+            mappings_dict = self._update_mappings_dict(g_id, mappings_dict, 1, comb, tmp_series, y_series)
         return mappings_dict, prev_tmp_dict
 
     @staticmethod
-    def _create_feature_set_col(dataframe, feature_set, prev_tmp_dict, new_tmp_dict):
-        tmp_series = prev_tmp_dict[feature_set[:-1]] + dataframe[feature_set[-1]]
+    def _create_feature_set_col(rel_idxs, dataframe, feature_set, prev_tmp_dict, new_tmp_dict):
+        tmp_series = prev_tmp_dict[feature_set[:-1]] + dataframe[feature_set[-1]][rel_idxs]
         new_tmp_dict[feature_set] = tmp_series.copy()
         return tmp_series, new_tmp_dict
 
@@ -99,11 +103,11 @@ class FeatureLatticeGraph:
         return data
 
     def _get_node_features_and_labels(self, data):
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.feature_num)
         for g_id in range(self.subgroups_num):
             x_tensor = torch.zeros(lattice_nodes_num, self.feature_num, dtype=torch.float)
             y_tensor = torch.zeros(lattice_nodes_num, dtype=torch.float)
-            for comb_size in range(self.min_k, self.feature_num + 1):
+            for comb_size in range(1, self.feature_num + 1):
                 for comb in self.mappings_dict[g_id][comb_size].keys():
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     x_tensor[node_id] = torch.tensor([int(digit) for digit in
@@ -115,7 +119,7 @@ class FeatureLatticeGraph:
 
     def _get_edge_index(self, data):
         # TODO: Optimize this function. The current implementation is not efficient.
-        # edges_num = get_lattice_edges_num(self.feature_num, self.min_k, self.feature_num)
+        # edges_num = get_lattice_edges_num(self.feature_num, self.feature_num)
         data = self._get_intra_lattice_edges(data)
         data = self._get_inter_lattice_edges(data)
         return data
@@ -128,7 +132,7 @@ class FeatureLatticeGraph:
     def _get_inter_level_edges(self, data):
         for g_id in range(self.subgroups_num):
             edge_index = []
-            for comb_size in range(self.min_k, self.feature_num):
+            for comb_size in range(1, self.feature_num):
                 for comb in self.mappings_dict[g_id][comb_size]:
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     for next_comb in self.mappings_dict[g_id][comb_size + 1]:
@@ -151,7 +155,7 @@ class FeatureLatticeGraph:
         for g_id in range(self.subgroups_num):
             edge_set = set()
             edge_index = []
-            for comb_size in range(max(2, self.min_k), self.feature_num + 1):
+            for comb_size in range(2, self.feature_num + 1):
                 for comb in self.mappings_dict[g_id][comb_size]:
                     node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                     for next_comb in self.mappings_dict[g_id][comb_size]:
@@ -167,7 +171,7 @@ class FeatureLatticeGraph:
         return data
 
     def _get_inter_lattice_edges(self, data):
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_k, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.feature_num)
         edge_index = [[node_id, node_id] for node_id in range(lattice_nodes_num)]
         for g_id1 in range(self.subgroups_num):
             for g_id2 in range(g_id1 + 1, self.subgroups_num):
