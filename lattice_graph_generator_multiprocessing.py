@@ -250,12 +250,15 @@ if __name__ == "__main__":
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
     parser.add_argument('--edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
+    parser.add_argument('is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
     args = parser.parse_args()
 
     if args.dataset_path is None:
-        # For synthetic datasets
-        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+        if args.is_synthetic:
+            dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+        else:
+            dataset_path = f"RealWorldData/{args.data_name}/dataset.pkl"
     else:
         # For real-world datasets
         dataset_path = args.dataset_path

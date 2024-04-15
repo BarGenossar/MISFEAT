@@ -213,12 +213,14 @@ if __name__ == "__main__":
                         help='add attributes to the edges')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
     parser.add_argument('--data_name', type=str, default="startup", help='name of the dataset, could be loan/startup/diabetes')
+    parser.add_argument('is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     args = parser.parse_args()
 
     if args.dataset_path is None:
-        # For synthetic datasets
-        # dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-        dataset_path = f"RealWorldData/{args.data_name}/dataset.pkl"
+        if args.is_synthetic:
+            dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
+        else:
+            dataset_path = f"RealWorldData/{args.data_name}/dataset.pkl"
     else:
         # For real-world datasets
         dataset_path = args.dataset_path
