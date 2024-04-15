@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
     parser.add_argument('--edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
-    parser.add_argument('is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
+    parser.add_argument('--is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
     args = parser.parse_args()
 
