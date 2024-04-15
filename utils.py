@@ -27,15 +27,15 @@ def convert_comb_to_binary(comb, feature_num):
     return binary[::-1]
 
 
-def get_lattice_nodes_num(feature_num, min_subset_size, max_subset_size):
-    return sum([math.comb(feature_num, i) for i in range(min_subset_size, max_subset_size + 1)])
+def get_lattice_nodes_num(feature_num, max_subset_size):
+    return sum([math.comb(feature_num, i) for i in range(1, max_subset_size + 1)])
 
 
-def get_lattice_edges_num(feature_num, min_subset_size, max_subset_size, within_levels=True):
-    edges_num = sum([math.comb(feature_num, i) * i for i in range(min_subset_size+1, max_subset_size+1)])
+def get_lattice_edges_num(feature_num, max_subset_size, within_levels=True):
+    edges_num = sum([math.comb(feature_num, i) * i for i in range(2, max_subset_size+1)])
     if within_levels:
         edges_num += sum([math.comb(feature_num, i) * i * (feature_num - i) for i
-                          in range(max(2, min_subset_size), max_subset_size)])
+                          in range(2, max_subset_size)])
     return edges_num
 
 
