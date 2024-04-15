@@ -190,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=True)
+    parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('-dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
