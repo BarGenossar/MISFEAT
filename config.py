@@ -1,6 +1,6 @@
 
 class LatticeGeneration:
-    formula_idx = 1
+    formula_idx = 2
     hyperparams_idx = 1
     min_k = 1
     within_level_edges = False

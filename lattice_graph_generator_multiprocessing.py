@@ -17,8 +17,9 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, with_edge_attrs=False):
+    def __init__(self, dataset_path, tqdm=False, with_edge_attrs=False):
         self.with_edge_attrs = with_edge_attrs
+        self.tqdm = tqdm
         self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
         self.subgroups_num = self.dataset['subgroup'].nunique()
@@ -64,7 +65,7 @@ class FeatureLatticeGraph:
         rel_idxs = dataframe[dataframe['subgroup'] == str(g_id)].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
-        for comb in tqdm.tqdm(feature_set_combs):
+        for comb in tqdm.tqdm(feature_set_combs) if self.tqdm else feature_set_combs:
             comb_property_list.append(self._process_comb(comb, rel_idxs, dataframe, prev_tmp_dict, y_series))
         mappings_dict, prev_tmp_dict = self._update_comb_dicts(g_id, mappings_dict, comb_size, comb_property_list)
         return mappings_dict, prev_tmp_dict
@@ -106,10 +107,13 @@ class FeatureLatticeGraph:
 
     def _create_multiple_feature_lattice(self):
         print(f"\nCreating the feature lattice...")
+        start_time = time.time()
         data = HeteroData()
         data = self._get_node_features_and_labels(data)
         data = self._get_edge_index(data)
         data = self._get_edge_attrs(data)
+        end_time = time.time()
+        print(f"Feature lattice creation took: {round(end_time - start_time, 4)} seconds\n ========================\n")
         return data
 
     def _get_node_features_and_labels(self, data):
@@ -124,7 +128,8 @@ class FeatureLatticeGraph:
         x_tensor = torch.zeros(lattice_nodes_num, self.feature_num, dtype=torch.float)
         y_tensor = torch.zeros(lattice_nodes_num, dtype=torch.float)
         for comb_size in range(1, self.feature_num + 1):
-            for comb in tqdm.tqdm(self.mappings_dict[g_id][comb_size].keys()):
+            combs = self.mappings_dict[g_id][comb_size].keys()
+            for comb in tqdm.tqdm(combs) if self.tqdm else combs:
                 node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                 x_tensor[node_id] = torch.tensor([int(digit) for digit in
                                                   self.mappings_dict[g_id][comb_size][comb]['binary_vector']])
@@ -160,7 +165,8 @@ class FeatureLatticeGraph:
     def _get_gid_inter_level_edges(self, g_id):
         edge_index = []
         for comb_size in range(1, self.feature_num):
-            for comb in tqdm.tqdm(self.mappings_dict[g_id][comb_size]):
+            combs = self.mappings_dict[g_id][comb_size].keys()
+            for comb in tqdm.tqdm(combs) if self.tqdm else combs:
                 node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                 for next_comb in self.mappings_dict[g_id][comb_size + 1]:
                     if set(comb).issubset(set(next_comb)):
@@ -194,7 +200,8 @@ class FeatureLatticeGraph:
         edge_set = set()
         edge_index = []
         for comb_size in range(2, self.feature_num + 1):
-            for comb in tqdm.tqdm(self.mappings_dict[g_id][comb_size]):
+            combs = self.mappings_dict[g_id][comb_size].keys()
+            for comb in tqdm.tqdm(combs) if self.tqdm else combs:
                 node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                 for next_comb in self.mappings_dict[g_id][comb_size]:
                     # Check if the overlapping between the two combinations is at size comb_size - 1
@@ -252,6 +259,7 @@ if __name__ == "__main__":
                         help='add attributes to the edges')
     parser.add_argument('--is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
+    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
     if args.dataset_path is None:
@@ -262,5 +270,8 @@ if __name__ == "__main__":
     else:
         # For real-world datasets
         dataset_path = args.dataset_path
-
-    lattice = FeatureLatticeGraph(dataset_path)
+    start = time.time()
+    lattice = FeatureLatticeGraph(dataset_path, args.print_tqdm)
+    end = time.time()
+    print(f"Total time: {round(end - start, 4)} seconds")
+    print(f"/n ============================================================/n")

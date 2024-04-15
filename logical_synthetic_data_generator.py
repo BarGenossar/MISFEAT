@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import os
 import pandas as pd
+from config import LatticeGeneration
 
 
 class LogicalDatasetGenerator:
@@ -175,8 +176,8 @@ class LogicalDatasetGenerator:
             tmp_df = df[df['subgroup'] == subgroup].copy()
             subgroup_noise = np.random.normal(random_noise_mean, random_noise_std)
             for feature in feature_list:
-                noise_flip_prob = np.random.normal(subgroup_noise, subgroup_noise/2)
-                tmp_df[feature] = tmp_df[feature].apply(lambda x: x if np.random.rand() > noise_flip_prob
+                noise_flip_prob = np.random.normal(subgroup_noise, subgroup_noise/4)
+                tmp_df[feature] = tmp_df[feature].apply(lambda x: x if np.random.rand() < noise_flip_prob
                                                         else np.random.choice(self.feature_range)).astype(int)
             df.loc[tmp_df.index] = tmp_df
         return df
@@ -218,12 +219,12 @@ class LogicalDatasetGenerator:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
-    parser.add_argument('--formula', type=str, default='3', help='Index of the formula to be generated')
-    parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
+    parser.add_argument('--formula', type=str, default=LatticeGeneration.formula_idx, help='Index of the formula to be generated')
+    parser.add_argument('--config', type=str, default=LatticeGeneration.hyperparams_idx, help='Index of the configuration to be generated')
     args = parser.parse_args()
 
     configs = json.load(open('data_generation_config.json'))
-    data = LogicalDatasetGenerator(args.formula, args.config, configs['formulas'][args.formula]['formula'],
-                                   configs['hyperparams'][args.config])
+    data = LogicalDatasetGenerator(args.formula, args.config, configs['formulas'][str(args.formula)]['formula'],
+                                   configs['hyperparams'][str(args.config)])
     data.save()
 

@@ -33,12 +33,6 @@ class FeatureLatticeGraph:
         return df
 
     def _create_mappings_dict(self):
-        """
-        Create a dictionary that maps feature combinations to the following:
-        1. The mutual information score between the feature combination and the target variable
-        2. The binary vector representation of the feature combination
-        3. The node ID of the feature combination
-        """
         print(f"Generating the mappings dictionary...\n =====================================\n")
         dataframe = self.dataset.astype(str)
         mappings_dict = defaultdict(dict)
@@ -69,7 +63,7 @@ class FeatureLatticeGraph:
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
         # score = normalized_mutual_info_score(tmp_series, y_series) + 0.5
         score = mutual_info_score(tmp_series, y_series)
-        mappings_dict[g_id][comb_size][comb]['score'] = round(score, 4)
+        mappings_dict[g_id][comb_size][comb]['score'] = round(score, 6)
         mappings_dict[g_id][comb_size][comb]['binary_vector'] = binary_vec
         mappings_dict[g_id][comb_size][comb]['node_id'] = convert_binary_to_decimal(binary_vec) - 1
         return mappings_dict
@@ -82,8 +76,6 @@ class FeatureLatticeGraph:
         y_series = y_series[rel_idxs]
         for comb in feature_set_combs:
             tmp_series = dataframe[comb[0]][rel_idxs]
-            for i in range(1, len(comb)):
-                tmp_series = tmp_series + dataframe[comb[i]][rel_idxs]
             prev_tmp_dict[comb] = tmp_series.copy()
             mappings_dict = self._update_mappings_dict(g_id, mappings_dict, 1, comb, tmp_series, y_series)
         return mappings_dict, prev_tmp_dict
@@ -213,7 +205,7 @@ if __name__ == "__main__":
                         help='add attributes to the edges')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
     parser.add_argument('--data_name', type=str, default="startup", help='name of the dataset, could be loan/startup/diabetes')
-    parser.add_argument('is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
+    parser.add_argument('--is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     args = parser.parse_args()
 
     if args.dataset_path is None:
