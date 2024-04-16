@@ -117,24 +117,26 @@ class FeatureLatticeGraph:
         return data
 
     def _get_intra_lattice_edges(self, data):
-        data = self._get_inter_level_edges(data)
-        data = self._get_intra_level_edges(data)
-        return data
-
-    def _get_inter_level_edges(self, data):
+        edge_index = self._get_inter_level_edges()
+        edge_index = self._get_intra_level_edges(edge_index)
         for g_id in range(self.subgroups_num):
-            edge_index = []
-            for comb_size in range(1, self.feature_num):
-                for comb in self.mappings_dict[g_id][comb_size]:
-                    node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
-                    for next_comb in self.mappings_dict[g_id][comb_size + 1]:
-                        if set(comb).issubset(set(next_comb)):
-                            next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
-                            edge_index.append([node_id, next_node_id])
-                            edge_index.append([next_node_id, node_id])
             edge_name = self._get_edge_name(g_id, g_id)
             data[f"g{g_id}", edge_name, f"g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         return data
+
+    def _get_inter_level_edges(self):
+        # The lattice structure is identical for all subgroups, so it is enough to consider only 'g_0' to get the edges
+        edge_index = []
+        g_id = 0
+        for comb_size in range(1, self.feature_num):
+            for comb in self.mappings_dict[g_id][comb_size]:
+                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                for next_comb in self.mappings_dict[g_id][comb_size + 1]:
+                    if set(comb).issubset(set(next_comb)):
+                        next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
+                        edge_index.append([node_id, next_node_id])
+                        edge_index.append([next_node_id, node_id])
+        return edge_index
 
     @staticmethod
     def _get_edge_name(g_id1, g_id2):
@@ -142,25 +144,21 @@ class FeatureLatticeGraph:
         g_str2 = ''.join(('g', str(g_id2)))
         return ''.join((g_str1, 'TO', g_str2))
 
-
-    def _get_intra_level_edges(self, data):
-        for g_id in range(self.subgroups_num):
-            edge_set = set()
-            edge_index = []
-            for comb_size in range(2, self.feature_num + 1):
-                for comb in self.mappings_dict[g_id][comb_size]:
-                    node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
-                    for next_comb in self.mappings_dict[g_id][comb_size]:
-                        # Check if the overlapping between the two combinations is at size comb_size - 1
-                        if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
-                            if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
-                                edge_set.add((comb, next_comb))
-                                next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
-                                edge_index.append([node_id, next_node_id])
-                                edge_index.append([next_node_id, node_id])
-            edge_name = self._get_edge_name(g_id, g_id)
-            data[f"g{g_id}", edge_name, f"g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
-        return data
+    def _get_intra_level_edges(self, edge_index):
+        g_id = 0
+        edge_set = set()
+        for comb_size in range(2, self.feature_num + 1):
+            for comb in self.mappings_dict[g_id][comb_size]:
+                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                for next_comb in self.mappings_dict[g_id][comb_size]:
+                    # Check if the overlapping between the two combinations is at size comb_size - 1
+                    if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
+                        if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
+                            edge_set.add((comb, next_comb))
+                            next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
+                            edge_index.append([node_id, next_node_id])
+                            edge_index.append([next_node_id, node_id])
+        return edge_index
 
     def _get_inter_lattice_edges(self, data):
         lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.feature_num)

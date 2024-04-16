@@ -51,7 +51,7 @@ class PipelineManager:
 
     def _load_graph_information(self):
         lattice_graph = torch.load(self.graph_path)
-        subgroups = lattice_graph.x_dict.keys()
+        subgroups = lattice_graph.node_types
         return lattice_graph, subgroups
 
     def _get_missing_data_dict(self, missing_indices_dict):
@@ -59,7 +59,7 @@ class PipelineManager:
             return missing_indices_dict
         else:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
-                                                        self.args.manual_md).missing_indices_dict
+                                                      self.args.manual_md).missing_indices_dict
             with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
@@ -202,6 +202,7 @@ if __name__ == "__main__":
                                 for seed in range(1, seeds_num + 1)} for comb_size in args.comb_size_list}
 
     for seed in range(1, seeds_num + 1):
+        set_seed(seed)
         if not args.load_model or pipeline_obj.model_not_found(seed):
             print(f"Seed: {seed}\n=============================")
             pipeline_obj.train_model(seed)

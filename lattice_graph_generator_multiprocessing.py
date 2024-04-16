@@ -144,36 +144,45 @@ class FeatureLatticeGraph:
             data[gid].y = gid_nodes_dict[gid]["y"]
         return data
 
-
     def _get_edge_index(self, data):
-        # edges_num = get_lattice_edges_num(self.feature_num, self.feature_num)
         data = self._get_intra_lattice_edges(data)
         data = self._get_inter_lattice_edges(data)
         return data
 
     def _get_intra_lattice_edges(self, data):
-        data = self._get_inter_level_edges(data)
-        data = self._get_intra_level_edges(data)
+        edge_index = self._get_inter_level_edges()
+        edge_index = self._get_intra_level_edges(edge_index)
+        for g_id in range(self.subgroups_num):
+            edge_name = self._get_edge_name(g_id, g_id)
+            data[f"g{g_id}", edge_name, f"g{g_id}"].edge_index = torch.tensor(edge_index, dtype=torch.long).t()
         return data
 
-    def _get_inter_level_edges(self, data):
+    def _get_inter_level_edges(self):
         print(f"Getting the inter-level edges...\n ------------------\n")
-        with multiprocessing.Pool(processes=self.cores_to_use) as pool:
-            gid_inter_edges_dict_list = list(pool.map(self._get_gid_inter_level_edges, range(self.subgroups_num)))
-        return self._convert_gid_inter_edges_to_data(gid_inter_edges_dict_list, data)
-
-    def _get_gid_inter_level_edges(self, g_id):
         edge_index = []
+        g_id = 0
         for comb_size in range(1, self.feature_num):
-            combs = self.mappings_dict[g_id][comb_size].keys()
-            for comb in tqdm.tqdm(combs) if self.tqdm else combs:
+            for comb in self.mappings_dict[g_id][comb_size]:
                 node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
                 for next_comb in self.mappings_dict[g_id][comb_size + 1]:
                     if set(comb).issubset(set(next_comb)):
                         next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
                         edge_index.append([node_id, next_node_id])
                         edge_index.append([next_node_id, node_id])
-        return {f"g{g_id}": {'edge_index': edge_index, 'edge_name': self._get_edge_name(g_id, g_id)}}
+        return edge_index
+
+    # def _get_gid_inter_level_edges(self, g_id):
+    #     edge_index = []
+    #     for comb_size in range(1, self.feature_num):
+    #         combs = self.mappings_dict[g_id][comb_size].keys()
+    #         for comb in tqdm.tqdm(combs) if self.tqdm else combs:
+    #             node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+    #             for next_comb in self.mappings_dict[g_id][comb_size + 1]:
+    #                 if set(comb).issubset(set(next_comb)):
+    #                     next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
+    #                     edge_index.append([node_id, next_node_id])
+    #                     edge_index.append([next_node_id, node_id])
+    #     return {f"g{g_id}": {'edge_index': edge_index, 'edge_name': self._get_edge_name(g_id, g_id)}}
 
     @staticmethod
     def _convert_gid_inter_edges_to_data(gid_inter_edges_dict_list, data):
@@ -190,11 +199,22 @@ class FeatureLatticeGraph:
         g_str2 = ''.join(('g', str(g_id2)))
         return ''.join((g_str1, 'TO', g_str2))
 
-    def _get_intra_level_edges(self, data):
+    def _get_intra_level_edges(self, edge_index):
         print(f"Getting the intra-level edges...\n ------------------\n")
-        with multiprocessing.Pool(processes=self.cores_to_use) as pool:
-            gid_intra_edges_dict_list = list(pool.map(self._get_gid_intra_level_edges, range(self.subgroups_num)))
-        return self._convert_gid_intra_edges_to_data(gid_intra_edges_dict_list, data)
+        g_id = 0
+        edge_set = set()
+        for comb_size in range(2, self.feature_num + 1):
+            for comb in self.mappings_dict[g_id][comb_size]:
+                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                for next_comb in self.mappings_dict[g_id][comb_size]:
+                    # Check if the overlapping between the two combinations is at size comb_size - 1
+                    if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
+                        if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
+                            edge_set.add((comb, next_comb))
+                            next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
+                            edge_index.append([node_id, next_node_id])
+                            edge_index.append([next_node_id, node_id])
+        return edge_index
 
     def _get_gid_intra_level_edges(self, g_id):
         edge_set = set()
