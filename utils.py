@@ -78,16 +78,15 @@ def read_feature_num_from_txt(dataset_path):
     return None
 
 
-def compute_eval_metrics(mi_true, mi_pred, at_k, comb_size, feature_num):
+def compute_eval_metrics(ground_truth, preds, test_indices, at_k, comb_size, feature_num):
     eval_metrics, eval_func = get_eval_metric_func()
-    # comb_size_indices = get_comb_size_indices(len(predictions), comb_size, feature_num)
-    sorted_list_idx_true = np.argsort(mi_true.cpu().tolist())[::-1]
-    sorted_list_idx_pred = np.argsort(mi_pred.cpu().tolist())[::-1]
+    comb_size_indices = get_comb_size_indices(test_indices, comb_size, feature_num)
+    sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
+    sorted_pred_indices = get_sorted_indices(preds, comb_size_indices)
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            g_results = eval_func[metric](mi_true, mi_pred, k, sorted_list_idx_true, sorted_list_idx_pred, g_results)
-    g_results['kendall_tau'] = Kendall_tau(sorted_list_idx_true, sorted_list_idx_pred)
+            g_results = eval_func[metric](ground_truth, preds, k, sorted_gt_indices, sorted_pred_indices, g_results)
     return g_results
 
 
@@ -125,6 +124,7 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 #     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
 #     DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
 #     results['NDCG'][k] = round(DCG / IDCG, 4)
+#     return results
 
 
 #### sklearn version
@@ -135,25 +135,24 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 #     results['NDCG'][k] = ndcg_score(np.asarray([relevance]), np.asarray([relevance_pred]))
 
 
-#### Thinh's version
-def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
-    relevance = [0] * len(ground_truth)
-    for i in range(k): relevance[sorted_list_idx_true[i]] = k - i
-    # for i in range(k): relevance[sorted_list_idx_true[i]] = 1
-    DCG = 0.
-    IDCG = 0.
+### Thinh's version
+def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
+    cands_num = len(sorted_list_idx_gt)
+    relevance = [0 for _ in range(len(ground_truth))]
+    for i in range(cands_num):
+        relevance[sorted_list_idx_gt[i]] = cands_num - i
+    DCG, IDCG = 0, 0
     for i in range(k):
-        IDCG += (k - i) / math.log(i + 2, 2)
-        # IDCG += 1 / math.log(i + 2, 2)
+        IDCG += relevance[sorted_list_idx_gt[i]] / math.log(i + 2, 2)
         DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
     results['NDCG'][k] = round(DCG / IDCG, 4)
-
-
+    return results
 
 
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
     results['PREC'][k] = round(precision / k, 4)
+    return results
 
 
 def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
@@ -161,14 +160,15 @@ def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_in
     rmse = sum([(ground_truth[sorted_gt_indices[i]] -
                    predictions[sorted_gt_indices[i]])**2 for i in range(k)])
     results['RMSE'][k] = round(math.sqrt(rmse.item() / k), 4)
+    return results
 
 
 def get_comb_size_indices(node_ids, comb_size, feature_num):
     comb_size_indices = []
-    for id in node_ids:
-        binary_vec = convert_decimal_to_binary(id + 1, feature_num)
+    for node_id in node_ids:
+        binary_vec = convert_decimal_to_binary(node_id + 1, feature_num)
         if binary_vec.count('1') == comb_size:
-            comb_size_indices.append(id)
+            comb_size_indices.append(node_id)
     return comb_size_indices
 
 
