@@ -46,7 +46,7 @@ class PipelineManager:
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
-        self.train_idxs_dict, self.valid_idxs_dict, self.unsampled_dict = self._train_validation_split()
+        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
         self.test_idxs_dict = self._get_test_indices()
 
     def _load_graph_information(self):
@@ -64,8 +64,8 @@ class PipelineManager:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
 
-    def _init_model_optim(self, seed):
-        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, seed, self.args.num_layers,
+    def _init_model_optim(self):
+        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers,
                            self.args.p_dropout)
         model = to_hetero(model, self.lattice_graph.metadata())
         model.to(device)
@@ -73,16 +73,16 @@ class PipelineManager:
         return model, optimizer
 
     def test_subgroup(self, subgroup, comb_size, show_results=True):
-        test_indices = self.test_indices[subgroup]
+        test_indices = self.test_idxs_dict[subgroup]
         self.lattice_graph.to(device)
         model = torch.load(f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt")
         model.to(device)
         model.eval()
         with torch.no_grad():
             out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        labels = self.lattice_graph[subgroup].y[test_indices]
-        predictions = out[subgroup][test_indices]
-        tmp_results_dict = compute_eval_metrics(labels, predictions, self.at_k, comb_size, self.feature_num)
+        labels = self.lattice_graph[subgroup].y
+        preds = out[subgroup]
+        tmp_results_dict = compute_eval_metrics(labels, preds, test_indices, self.at_k, comb_size, self.feature_num)
         if show_results:
             print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
@@ -91,8 +91,7 @@ class PipelineManager:
         sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict)
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
-        unsampled_dict = sampler.unsampled_dict
-        return train_idxs_dict, valid_idxs_dict, unsampled_dict
+        return train_idxs_dict, valid_idxs_dict
 
     def _get_test_indices(self):
         test_idxs_dict = dict()
@@ -138,7 +137,7 @@ class PipelineManager:
         self.lattice_graph.to(device)
         for subgroup in self.subgroups:
             print(f"\nTraining on subgroup {subgroup}...")
-            model, optimizer = self._init_model_optim(seed)
+            model, optimizer = self._init_model_optim()
             train_indices, validation_indices = self.train_idxs_dict[subgroup], self.valid_idxs_dict[subgroup]
             no_impr_counter = 0
             epochs_stable_val = GNN.epochs_stable_val
@@ -183,7 +182,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=False)
+    parser.add_argument('--load_model', type=bool, default=True)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
