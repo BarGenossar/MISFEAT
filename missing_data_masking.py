@@ -39,7 +39,7 @@ class MissingDataMasking:
     def _get_random_missing_indices_dict(self, missing_indices_dict, binary_vecs):
         for subgroup in self.subgroups:
             for f_idx in range(self.feature_num):
-                if np.random.rand() < self.general_missing_prob: # 0.2
+                if np.random.rand() < self.general_missing_prob:
                     missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
             missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
         return missing_indices_dict

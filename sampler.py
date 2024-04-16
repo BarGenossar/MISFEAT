@@ -1,18 +1,24 @@
 import random
 import numpy as np
 import typing as t
+from config import Sampling
+from sklearn.model_selection import train_test_split
 
 
 class NodeSampler:
-    def __init__(self, subgroups, feature_num, missing_indices_dict, sampling_ratio, sampling_method='random'):
-        self.subgroups = subgroups
+    def __init__(self, config_num, feature_num, non_missing_dict):
+        np.random.seed(config_num)
+        self.seed = config_num
+        self.subgroups = non_missing_dict.keys()
         self.feature_num = feature_num
-        self.missing_indices_dict = missing_indices_dict
-        self.sampling_ratio = sampling_ratio
-        self.sampling_method = 'random' if self.sampling_ratio == 1 else sampling_method
-        self.selected_samples = self._get_selected_samples()
+        self.non_missing_dict = non_missing_dict
+        self.sampling_ratio = Sampling.sampling_ratio
+        self.sampling_method = Sampling.method
+        self.validation_ratio = Sampling.validation_ratio
+        self.sampling_func = self._get_sampling_func_dict()
+        self.train_indices_dict, self.val_indices_dict, self.unsampled_dict = self._get_samples()
 
-    def _get_selected_samples(self):
+    def _get_sampling_func_dict(self):
         sampling_funcs = {
             'random': self._random_sampling,
             'uniform': self._uniform_sampling,
@@ -22,13 +28,25 @@ class NodeSampler:
             raise ValueError(f"Invalid sampling method: {self.sampling_method}")
         return sampling_funcs[self.sampling_method]()
 
+    def _get_samples(self):
+        if self.sampling_ratio < 1:
+            sampled_indices_dict, unsampled_dict = self.sampling_func()
+        else:
+            sampled_indices_dict = self.non_missing_dict
+            unsampled_dict = {g_id: [] for g_id in self.subgroups}
+        train_indices_dict, val_indices_dict = dict(), dict()
+        for g_id, indices in sampled_indices_dict.items():
+            train_indices, val_indices = train_test_split(indices, test_size=self.validation_ratio)
+            train_indices_dict[g_id] = train_indices
+            val_indices_dict[g_id] = val_indices
+        return train_indices_dict, val_indices_dict, unsampled_dict
+
     def _random_sampling(self):
-        indices = dict()
-        for subgroup in self.subgroups:
-            non_missing_idx = sorted(list( set(range(2**self.feature_num - 1)) - set(self.missing_indices_dict[subgroup]['all']) ))
-            num_samples = int(self.sampling_ratio * len(non_missing_idx))
-            indices = np.random.choice(non_missing_idx, num_samples, replace=False)
-        return list(indices)
+        sampled_indices_dict = dict()
+        for g_id in range(self.subgroups):
+            num_samples = int(self.sampling_ratio * self.non_missing_dict[g_id])
+            sampled_indices_dict[g_id] = list(np.random.choice(self.non_missing_dict[g_id], num_samples, replace=False))
+        return sampled_indices_dict
 
     def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> None:
         curr_node = node_list[-1]

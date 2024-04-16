@@ -46,8 +46,8 @@ class PipelineManager:
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
-        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
-        self.test_indices = self._get_test_indices()
+        self.train_idxs_dict, self.valid_idxs_dict, self.unsampled_dict = self._train_validation_split()
+        self.test_idxs_dict = self._get_test_indices()
 
     def _load_graph_information(self):
         lattice_graph = torch.load(self.graph_path)
@@ -88,18 +88,11 @@ class PipelineManager:
         return tmp_results_dict
 
     def _train_validation_split(self):
-        train_idxs_dict, valid_idxs_dict = dict(), dict()
-        for g_id in self.subgroups:
-            sampler = NodeSampler(self.config_idx, self.non_missing_dict[g_id],
-                                  self.args.sampling_ratio, self.args.sampling_method)
-            if self.args.valid_ratio == 0:
-                train_idxs_dict[g_id] = sampler.selected_samples
-                valid_idxs_dict[g_id] = sampler.selected_samples
-            else:
-                train_idxs_dict[g_id], valid_idxs_dict[g_id] = train_test_split(sampler.selected_samples,
-                                                                                test_size=self.args.valid_ratio,
-                                                                                random_state=self.config_idx)
-        return train_idxs_dict, valid_idxs_dict
+        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict)
+        train_idxs_dict = sampler.train_indices_dict
+        valid_idxs_dict = sampler.val_indices_dict
+        unsampled_dict = sampler.unsampled_dict
+        return train_idxs_dict, valid_idxs_dict, unsampled_dict
 
     def _get_test_indices(self):
         test_idxs_dict = dict()
