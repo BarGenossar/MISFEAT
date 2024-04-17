@@ -1,6 +1,6 @@
 
 class LatticeGeneration:
-    formula_idx = 2
+    formula_idx = 1
     hyperparams_idx = 1
     min_k = 1
     within_level_edges = False
@@ -10,13 +10,14 @@ class LatticeGeneration:
 
 
 class MissingDataConfig:
-    general_missing_prob = 0.1
+    missing_prob = 0.1
+    max_missing_ratio = 0.6
     missing_rate_dict = {'relevant': 0.2, 'correlated': 0.2, 'redundant': 0.2, 'noisy': 0.2}
 
 
 class Sampling:
-    method= 'random'
-    sampling_ratio = 0.75
+    method = 'random'
+    sampling_ratio = 1.0
     validation_ratio = 0.2
 
 
@@ -25,11 +26,21 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 500
+    epochs = 300
     epochs_stable_val = 5
+
+class MLP:
+    hidden_channels = 64
+    num_layers = 2
+    p_dropout = 0
+    epochs = 300
+    epochs_stable_val = 5
+    MLP_results_dir = 'MLP_results/'
 
 
 class Evaluation:
-    at_k = [5, 10, 20]
+    at_k = [3, 5, 10]
     comb_size_list = [3, 4, 5]
-    eval_metrics = ['NDCG', 'PREC', 'RMSE']
+    eval_metrics = ['NDCG', 'PREC']
+    formula_idx_list = [0, 1, 2, 3, 4]
+    config_idx_list = [1, 3]
