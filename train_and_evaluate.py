@@ -1,7 +1,7 @@
 
 import argparse
 from GNN_models import LatticeGNN
-from config import LatticeGeneration, GNN, Sampling
+from config import LatticeGeneration, GNN, Sampling, MissingDataConfig
 from missing_data_masking import MissingDataMasking
 from sampler import NodeSampler
 from utils import *
@@ -59,7 +59,7 @@ class PipelineManager:
             return missing_indices_dict
         else:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
-                                                      self.args.manual_md).missing_indices_dict
+                                                      self.args.missing_prob, self.args.manual_md).missing_indices_dict
             with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
@@ -88,7 +88,7 @@ class PipelineManager:
         return tmp_results_dict
 
     def _train_validation_split(self):
-        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict)
+        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, args.sampling_ratio)
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
         return train_idxs_dict, valid_idxs_dict
@@ -172,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
     parser.add_argument('--p_dropout', type=float, default=GNN.p_dropout)
     parser.add_argument('--epochs', type=int, default=GNN.epochs)
+    parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     parser.add_argument('--sampling_ratio', type=float, default=Sampling.sampling_ratio)
     parser.add_argument('--sampling_method', type=str, default=Sampling.method)
     parser.add_argument('--valid_ratio', type=str, default=Sampling.validation_ratio)
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=True)
+    parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
     args = parser.parse_args()
