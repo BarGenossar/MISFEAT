@@ -135,8 +135,8 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 #     results['NDCG'][k] = ndcg_score(np.asarray([relevance]), np.asarray([relevance_pred]))
 
 
-### Thinh's version
-def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
+### Bar's after Thinh's version
+def compute_ndcg_new(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
     cands_num = len(sorted_list_idx_gt)
     relevance = [0 for _ in range(len(ground_truth))]
     for i in range(cands_num):
@@ -144,6 +144,20 @@ def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_i
     DCG, IDCG = 0, 0
     for i in range(k):
         IDCG += relevance[sorted_list_idx_gt[i]] / math.log(i + 2, 2)
+        DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
+    results['NDCG'][k] = round(DCG / IDCG, 4)
+    return results
+
+### Thinh's version
+def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
+    relevance = [0] * len(ground_truth)
+    for i in range(k): relevance[sorted_list_idx_true[i]] = k - i
+    # for i in range(k): relevance[sorted_list_idx_true[i]] = 1
+    DCG = 0.
+    IDCG = 0.
+    for i in range(k):
+        IDCG += (k - i) / math.log(i + 2, 2)
+        # IDCG += 1 / math.log(i + 2, 2)
         DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
     results['NDCG'][k] = round(DCG / IDCG, 4)
     return results
@@ -176,8 +190,8 @@ def save_results(test_results, dir_path, comb_size_list, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     for comb_size in comb_size_list:
-        results_path = dir_path + f'results_size={comb_size}_sampling={args.sampling_ratio}.pkl'
-        results_path = dir_path + f'results_comb_size={comb_size}.pkl'
+        results_path = dir_path + (f'results_size={comb_size}|sampling={args.sampling_ratio}'
+                                   f'|missing_ratio={args.missing_prob}.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
