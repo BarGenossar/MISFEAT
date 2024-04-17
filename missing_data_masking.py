@@ -11,6 +11,7 @@ class MissingDataMasking:
         self.subgroups = subgroups
         self.manual = manual
         self.general_missing_prob = general_missing_prob
+        self.max_missing_ratio = MissingDataConfig.max_missing_ratio
         self.missing_indices_dict = self._set_missing_indices_dict()
 
     def _set_missing_indices_dict(self):
@@ -39,7 +40,16 @@ class MissingDataMasking:
     def _get_random_missing_indices_dict(self, missing_indices_dict, binary_vecs):
         for subgroup in self.subgroups:
             for f_idx in range(self.feature_num):
+                if len(missing_indices_dict[subgroup]) > self.max_missing_ratio * self.feature_num:
+                    break
                 if np.random.rand() < self.general_missing_prob:
                     missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
+            missing_indices_dict = self._handle_non_missing_indices(missing_indices_dict, subgroup, binary_vecs)
             missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
+        return missing_indices_dict
+
+    def _handle_non_missing_indices(self, missing_indices_dict, subgroup, binary_vecs):
+        if len(missing_indices_dict[subgroup]) == 0:
+            f_idx = np.random.randint(0, self.feature_num)
+            missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
         return missing_indices_dict

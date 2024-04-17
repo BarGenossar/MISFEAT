@@ -28,7 +28,11 @@ def get_pipeline_obj(args, dir_path):
 
 def get_dir_path(args):
     if args.dir_path is None:
-        return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
+        if args.is_synthetic:
+            return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
+        else:
+            #todo: Change it if needed
+            return f"RealWorldData/{args.data_name}/dataset.pkl"
     else:
         return args.dir_path
 
@@ -46,7 +50,7 @@ class PipelineManager:
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
-        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
+        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split(args)
         self.test_idxs_dict = self._get_test_indices()
 
     def _load_graph_information(self):
@@ -87,7 +91,7 @@ class PipelineManager:
             print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
-    def _train_validation_split(self):
+    def _train_validation_split(self, args):
         sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, args.sampling_ratio)
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
@@ -147,7 +151,7 @@ class PipelineManager:
                     break
                 loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
                 if epoch == 1 or epoch % 5 == 0:
-                    print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                    # print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
                     if not self.args.save_model:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
@@ -183,6 +187,8 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
+    parser.add_argument('--is_synthetic', type=bool, default=True,
+                        help='whether the dataset is synthetic or real-world')
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')

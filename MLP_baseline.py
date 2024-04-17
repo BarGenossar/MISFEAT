@@ -43,6 +43,7 @@ def get_input_vectors(indices, feature_num):
     x_input = []
     for node_id in indices:
         binary_vec = convert_decimal_to_binary(node_id + 1, feature_num)
+        binary_vec = [int(digit) for digit in binary_vec]
         x_input.append(binary_vec)
     return torch.tensor(x_input, dtype=torch.float32).to(device)
 
@@ -53,8 +54,8 @@ def train_mlp_model(pipeline_obj, subgroups, args):
     lattice_graph = pipeline_obj.lattice_graph
     lattice_graph.to(device)
     dir_path = pipeline_obj.dir_path
-    input_size = lattice_graph.x_dict[subgroups[0]].shape[1]
     feature_num = pipeline_obj.feature_num
+    input_size = feature_num
     for subgroup in subgroups:
         print(f"\nTraining on subgroup {subgroup}...")
         model = MLPModel(input_size, args.hidden_channels, args.num_layers, args.p_dropout).to(device)
@@ -139,12 +140,12 @@ def save_results_MLPModel(test_results, dir_path, comb_size_list, args):
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
-    save_hyperparams(dir_path, args)
+    save_hyperparams_MLP(dir_path, args)
     return
 
 
 def save_hyperparams_MLP(dir_path, args):
-    hyperparams = (f"Model: {args.model}\nHidden channels: {args.hidden_channels}\n"
+    hyperparams = (f"Hidden channels: {args.hidden_channels}\n"
                    f"Number of layers: {args.num_layers}\nDropout: {args.p_dropout}\nlr: {args.lr}\n"
                    f"weight_decay: {args.weight_decay}\n")
     hyperparams_path = dir_path + 'hyperparams_MLP.txt'
@@ -173,11 +174,13 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--load_model', type=bool, default=False, help='Used for loading the pipeline manager object')
+    parser.add_argument('--load_model', type=bool, default=True, help='Used for loading the pipeline manager object')
     parser.add_argument('--load_mlp_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
+    parser.add_argument('--is_synthetic', type=bool, default=True,
+                        help='whether the dataset is synthetic or real-world')
+    parser.add_argument('--dir_path', type=str, default=None)
     parser.add_argument('--res_path', type=str, default='MLP_baseline_results/')
-
     args = parser.parse_args()
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)

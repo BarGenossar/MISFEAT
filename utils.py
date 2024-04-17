@@ -136,7 +136,7 @@ def get_sorted_indices(score_tensor, comb_size_indices):
 
 
 ### Bar's after Thinh's version
-def compute_ndcg_new(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
+def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
     cands_num = len(sorted_list_idx_gt)
     relevance = [0 for _ in range(len(ground_truth))]
     for i in range(cands_num):
@@ -149,7 +149,7 @@ def compute_ndcg_new(ground_truth, predictions, k, sorted_list_idx_gt, sorted_li
     return results
 
 ### Thinh's version
-def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
+def compute_ndcg_thin(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
     relevance = [0] * len(ground_truth)
     for i in range(k): relevance[sorted_list_idx_true[i]] = k - i
     # for i in range(k): relevance[sorted_list_idx_true[i]] = 1
