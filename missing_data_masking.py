@@ -6,7 +6,7 @@ from utils import convert_decimal_to_binary
 
 class MissingDataMasking:
 
-    def __init__(self, feature_num, subgroups, config_num, manual=False):
+    def __init__(self, feature_num, subgroups, manual=False):
         self.feature_num = feature_num
         self.subgroups = subgroups
         self.manual = manual
@@ -48,7 +48,6 @@ class MissingDataMasking:
         pool = [f'f_{fid}' for fid in range(self.feature_num)] * (len(self.subgroups) - 1)
 
         for subgroup in self.subgroups:
-
             at_least_one_missing = False    # make sure at least one feature is missing from each subgroup
 
             for fid in range(self.feature_num):

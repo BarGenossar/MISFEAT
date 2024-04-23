@@ -16,12 +16,13 @@ warnings.filterwarnings("ignore")
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device('cpu')
 
 
 class PipelineManager:
     def __init__(self, args, lattice_graph):
         self.args = args
-        self.multiplier = 10  # 7000  # best (so far):  loan 400,  mobile 50 , startup 50
+        self.gamma = torch.autograd.Variable(torch.tensor([10.0]), requires_grad=True).to(device)  # 7000  # best (so far):  loan 400,  mobile 50 , startup 50
         self.at_k = [args.at_k] if not isinstance(args.at_k, list) else args.at_k
         self.dir_path = args.dir_path
         self.lattice_graph = lattice_graph
@@ -45,6 +46,7 @@ class PipelineManager:
         model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers, self.args.p_dropout)
         model = to_hetero(model, self.lattice_graph.metadata()).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.args.lr)
+        # optimizer.param_groups.append({'params': self.gamma, 'weight_decay': self.args.weight_decay, 'momentum': None, 'lr': self.args.lr})
         return model, optimizer
 
 
@@ -80,7 +82,7 @@ class PipelineManager:
         model.eval()
         with torch.no_grad():
             out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        mi_true = self.lattice_graph[subgroup].y[test_indices] * self.multiplier
+        mi_true = self.lattice_graph[subgroup].y[test_indices] * self.gamma
         mi_pred = out[subgroup][test_indices]
 
         tmp_results_dict = compute_eval_metrics(mi_true, mi_pred, self.at_k, comb_size, self.feature_num)
@@ -89,38 +91,43 @@ class PipelineManager:
         return tmp_results_dict
 
 
-    def _run_training_epoch(self, model, optimizer, criterion):
+    def _run_training_epoch(self, model, optimizer, criterion, update_gamma=False):
         model.train()
         optimizer.zero_grad()
         out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
 
+        # num_missing = [1 / (1+len(feats)) for feats in self.missing_features_dict.values() ]
         grads = {}
-
-        num_missing = [1 / (1+len(feats)) for feats in self.missing_features_dict.values() ]
-        epoch_loss = 0.
+        grad_gamma = 0.
+        epoch_loss = 0
         for gid, subgroup in enumerate(self.subgroups):
-
             train_indices = self.train_idxs_dict[subgroup]
-            mi_true = self.lattice_graph[subgroup].y[train_indices] * self.multiplier
+            mi_true = self.lattice_graph[subgroup].y[train_indices] * self.gamma
             mi_pred = out[subgroup][train_indices]
 
-            loss = criterion(mi_pred, mi_true)
-            loss.backward(retain_graph=True)
+            ## accumulate gradients across subgroups
+            if update_gamma:
+                loss = torch.sum((mi_true - mi_pred) ** 2)/len(mi_true)
+                grads = torch.autograd.grad(loss, self.gamma, torch.ones_like(loss))
+                grad_gamma += grads[0]
+            else:
+                loss = criterion(mi_pred, mi_true)
+                loss.backward(retain_graph=True)
 
-            for n, p in model.named_parameters():
-                if p.grad is not None:
-                    try:
-                        grads[n] += p.grad# * num_missing[gid]/sum(num_missing)
-                    except KeyError:
-                        grads[n] = p.grad# * num_missing[gid]/sum(num_missing)
-
-            optimizer.zero_grad()
-
+                for n, p in model.named_parameters():
+                    if p.grad is not None:
+                        try:
+                            grads[n] += p.grad# * num_missing[gid]/sum(num_missing)
+                        except KeyError:
+                            grads[n] = p.grad# * num_missing[gid]/sum(num_missing)
             epoch_loss += loss.item()
-                
-        for n, p in model.named_parameters():
-            if grads[n] is not None:
-                p.data -= self.args.lr * grads[n]
+
+        if update_gamma:
+            self.gamma -= 0.1 * grad_gamma
+        else:
+            for n, p in model.named_parameters():
+                if grads[n] is not None:
+                    p.data -= self.args.lr * grads[n]
         return epoch_loss / len(self.subgroups)
 
 
@@ -128,7 +135,7 @@ class PipelineManager:
         model.eval()
         with torch.no_grad():
             out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        mi_true = self.lattice_graph[subgroup].y[val_indices] * self.multiplier
+        mi_true = self.lattice_graph[subgroup].y[val_indices] * self.gamma
         mi_pred = out[subgroup][val_indices]
         return mi_true.tolist(), mi_pred.tolist()
 
@@ -160,11 +167,15 @@ class PipelineManager:
 
         no_impr_counter = 0
         best_mse = float('inf')
+        update_gamma = False
         for epoch in range(self.args.epochs):
             if no_impr_counter == GNN.epochs_stable_val:
                 break
-            train_loss = self._run_training_epoch(model, optimizer, criterion)
+            train_loss = self._run_training_epoch(model, optimizer, criterion, update_gamma)
+            update_gamma = not update_gamma
+            # if update_gamma is True: update_gamma = False
             if epoch == 0 or (epoch + 1) % 5 == 0:
+                # if update_gamma is False: update_gamma = True
                 mse, best_mse, no_impr_counter = self._run_over_validation(model, criterion, best_mse, no_impr_counter, seed)
                 print(f"Epoch: {epoch+1}, train loss = {train_loss:.4f}, val loss: {mse:.4f}, best val loss: {best_mse:.4f}")
     
@@ -225,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
+    parser.add_argument('--dir_path', type=str, default='RealWorldData/loan-trial', help='path to the directory file')
     args = parser.parse_args()
 
     ## load input data

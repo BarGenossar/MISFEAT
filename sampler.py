@@ -27,8 +27,8 @@ class NodeSampler:
         for subgroup in self.subgroups:
             non_missing_idx = sorted(list( set(range(2**self.feature_num - 1)) - set(self.missing_indices_dict[subgroup]['all']) ))
             num_samples = int(self.sampling_ratio * len(non_missing_idx))
-            indices = np.random.choice(non_missing_idx, num_samples, replace=False)
-        return list(indices)
+            indices[subgroup] = np.random.choice(non_missing_idx, num_samples, replace=False)
+        return indices
 
     def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> None:
         curr_node = node_list[-1]

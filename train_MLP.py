@@ -8,20 +8,57 @@ from sampler import NodeSampler
 from GNN_models import LatticeGNN
 from torch_geometric.nn import to_hetero
 from missing_data_masking import MissingDataMasking
-from config import LatticeGeneration, GNN, Sampling, Evaluation, MissingDataConfig
+from config import LatticeGeneration, GNN, Sampling, Evaluation, MissingDataConfig, MLP
 from sklearn.model_selection import train_test_split
-from utils import compute_eval_metrics, print_results, get_comb_size_indices, set_seed
+from utils import compute_eval_metrics, print_results, get_comb_size_indices, set_seed, convert_decimal_to_binary
 import warnings
 warnings.filterwarnings("ignore")
+from torch import nn
+from torch.nn import Linear
+import torch.nn.functional as F
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_input_vectors(indices, feature_num):
+    x_input = []
+    for node_id in indices:
+        binary_vec = convert_decimal_to_binary(node_id + 1, feature_num)
+        binary_vec = [int(digit) for digit in binary_vec]
+        x_input.append(binary_vec)
+    return torch.tensor(x_input, dtype=torch.float32).to(device)
+
+class MLPModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, p_dropout):
+        super(MLPModel, self).__init__()
+        self.relu = torch.nn.ReLU()
+        self.p_dropout = p_dropout
+        self.num_layers = num_layers
+        self._set_layers(input_size, hidden_size)
+        self.out = Linear(hidden_size, 1)
+
+    def _set_layers(self, input_size, hidden_size):
+        for layer_idx in range(1, self.num_layers + 1):
+            if layer_idx == 1:
+                setattr(self, f'fc{layer_idx}', Linear(input_size, hidden_size))
+            else:
+                setattr(self, f'fc{layer_idx}', Linear(hidden_size, hidden_size))
+        return
+
+    def forward(self, x):
+        for layer_idx in range(1, self.num_layers + 1):
+            fc = getattr(self, f'fc{layer_idx}')
+            x = self.relu(fc(x))
+            x = F.dropout(x, p=self.p_dropout, training=self.training)
+        output = self.out(x).squeeze()
+        return output
+
 
 
 class PipelineManager:
     def __init__(self, args, lattice_graph):
         self.args = args
-        self.multiplier = 10  # 7000  # best (so far):  loan 400,  mobile 50 , startup 50
+        self.multiplier = 200    # best (so far):  loan 400,  mobile 50-100 , startup 50
         self.at_k = [args.at_k] if not isinstance(args.at_k, list) else args.at_k
         self.dir_path = args.dir_path
         self.lattice_graph = lattice_graph
@@ -42,8 +79,8 @@ class PipelineManager:
 
 
     def _init_model_optim(self):
-        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers, self.args.p_dropout)
-        model = to_hetero(model, self.lattice_graph.metadata()).to(device)
+        model = MLPModel(self.feature_num, self.args.hidden_channels, self.args.num_layers, self.args.p_dropout)
+        model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.args.lr)
         return model, optimizer
 
@@ -74,101 +111,85 @@ class PipelineManager:
     def test_subgroup(self, subgroup, comb_size, show_results=False):
         test_indices = get_comb_size_indices(self.test_indices[subgroup], comb_size, self.feature_num)
         if len(test_indices) == 0: return ['this subgroup does not have missing feature']
-        self.lattice_graph.to(device)
-        model = torch.load(f"{self.dir_path}/{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_missing{MissingDataConfig.general_missing_prob}.pt")
+        x_test = get_input_vectors(test_indices, pipeline_obj.feature_num)
+        lattice_graph = pipeline_obj.lattice_graph
+        lattice_graph.to(device)
+        model = torch.load(f"{self.args.dir_path}/{'MLP_model'}_seed{seed}_{subgroup}.pt")
         model.to(device)
         model.eval()
         with torch.no_grad():
-            out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        mi_true = self.lattice_graph[subgroup].y[test_indices] * self.multiplier
-        mi_pred = out[subgroup][test_indices]
+            preds = model(x_test)
+        labels = lattice_graph[subgroup].y[test_indices]
 
-        tmp_results_dict = compute_eval_metrics(mi_true, mi_pred, self.at_k, comb_size, self.feature_num)
+        tmp_results_dict = compute_eval_metrics(labels, preds, self.at_k, comb_size, self.feature_num)
         if show_results:
             print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
 
-    def _run_training_epoch(self, model, optimizer, criterion):
+    def _run_training_epoch(self, train_indices, x_train, model, subgroup, optimizer, criterion, lattice_graph):
         model.train()
         optimizer.zero_grad()
-        out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-
-        grads = {}
-
-        num_missing = [1 / (1+len(feats)) for feats in self.missing_features_dict.values() ]
-        epoch_loss = 0.
-        for gid, subgroup in enumerate(self.subgroups):
-
-            train_indices = self.train_idxs_dict[subgroup]
-            mi_true = self.lattice_graph[subgroup].y[train_indices] * self.multiplier
-            mi_pred = out[subgroup][train_indices]
-
-            loss = criterion(mi_pred, mi_true)
-            loss.backward(retain_graph=True)
-
-            for n, p in model.named_parameters():
-                if p.grad is not None:
-                    try:
-                        grads[n] += p.grad# * num_missing[gid]/sum(num_missing)
-                    except KeyError:
-                        grads[n] = p.grad# * num_missing[gid]/sum(num_missing)
-
-            optimizer.zero_grad()
-
-            epoch_loss += loss.item()
-                
-        for n, p in model.named_parameters():
-            if grads[n] is not None:
-                p.data -= self.args.lr * grads[n]
-        return epoch_loss / len(self.subgroups)
+        preds = model(x_train)
+        labels = lattice_graph[subgroup].y[train_indices]
+        loss = criterion(preds, labels)
+        loss.backward()
+        optimizer.step()
+        return loss.item()
 
 
-    def _get_val_pred(self, val_indices, model, subgroup):
+    def get_validation_loss(self, lattice_graph, validation_indices, x_valid, model, subgroup, criterion):
         model.eval()
+        model.to(device)
         with torch.no_grad():
-            out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        mi_true = self.lattice_graph[subgroup].y[val_indices] * self.multiplier
-        mi_pred = out[subgroup][val_indices]
-        return mi_true.tolist(), mi_pred.tolist()
+            preds = model(x_valid)
+        labels = lattice_graph[subgroup].y[validation_indices]
+        loss = criterion(preds, labels)
+        return loss.item()
 
 
-    def _run_over_validation(self, model, criterion, best_mse, no_impr_counter, seed):
-        all_mi_true = []
-        all_mi_pred = []
-        for subgroup in self.subgroups:
-            val_indices = self.valid_idxs_dict[subgroup]
-            mi_true, mi_pred = self._get_val_pred(val_indices, model, subgroup)
-            all_mi_true.extend(mi_true)
-            all_mi_pred.extend(mi_pred)
-            mse = criterion(torch.tensor(all_mi_pred), torch.tensor(all_mi_true))
-            if mse < best_mse:
-                best_mse = mse
-                no_impr_counter = 0
-                torch.save(model, f"{self.dir_path}/{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_missing{MissingDataConfig.general_missing_prob}.pt")
+    def run_over_validation(self, lattice_graph, validation_indices, x_valid, model, subgroup, criterion,
+                        best_val, no_impr_counter, seed, dir_path):
+        loss_validation = self.get_validation_loss(lattice_graph, validation_indices, x_valid, model, subgroup, criterion)
+        if loss_validation < best_val:
+            best_val = loss_validation
+            no_impr_counter = 0
+            torch.save(model, f"{dir_path}/{'MLP_model'}_seed{seed}_{subgroup}.pt")
         else:
             no_impr_counter += 1
-        return mse, best_mse, no_impr_counter
+        return best_val, no_impr_counter
 
 
 
     def train_model(self, seed):
+        torch.manual_seed(seed)
         criterion = torch.nn.MSELoss()
-        self.lattice_graph.to(device)
-
-        model, optimizer = self._init_model_optim()
-
-        no_impr_counter = 0
-        best_mse = float('inf')
-        for epoch in range(self.args.epochs):
-            if no_impr_counter == GNN.epochs_stable_val:
-                break
-            train_loss = self._run_training_epoch(model, optimizer, criterion)
-            if epoch == 0 or (epoch + 1) % 5 == 0:
-                mse, best_mse, no_impr_counter = self._run_over_validation(model, criterion, best_mse, no_impr_counter, seed)
-                print(f"Epoch: {epoch+1}, train loss = {train_loss:.4f}, val loss: {mse:.4f}, best val loss: {best_mse:.4f}")
-    
-
+        lattice_graph = pipeline_obj.lattice_graph
+        lattice_graph.to(device)
+        dir_path = pipeline_obj.dir_path
+        feature_num = pipeline_obj.feature_num
+        input_size = feature_num
+        for subgroup in subgroups:
+            print(f"\nTraining on subgroup {subgroup}...")
+            model = MLPModel(input_size, self.args.hidden_channels, self.args.num_layers, self.args.p_dropout).to(device)
+            optimizer = torch.optim.Adam(model.parameters(), lr=self.args.lr, weight_decay=self.args.weight_decay)
+            train_indices = pipeline_obj.train_idxs_dict[subgroup]
+            valid_indices = pipeline_obj.valid_idxs_dict[subgroup]
+            x_train = get_input_vectors(train_indices, feature_num)
+            x_valid = get_input_vectors(valid_indices, feature_num)
+            no_impr_counter = 0
+            epochs_stable_val = MLP.epochs_stable_val
+            best_val = float('inf')
+            for epoch in range(args.epochs):
+                if no_impr_counter == epochs_stable_val:
+                    break
+                loss_value = self._run_training_epoch(train_indices, x_train, model, subgroup, optimizer, criterion, lattice_graph)
+                if epoch == 1 or epoch % 5 == 0:
+                    print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                    if not args.save_model:
+                        continue
+                    best_val, no_impr_counter = self.run_over_validation(lattice_graph, valid_indices, x_valid, model, subgroup,
+                                                                    criterion, best_val, no_impr_counter, seed, dir_path)
 
 def average_results(results_dict):
     num_seeds = len(results_dict[3])
@@ -191,7 +212,7 @@ def average_results(results_dict):
             avg_subgroup = 0
             for subgroup in subgroups:
                 avg_subgroup += aggr[comb_size][subgroup]['NDCG'][at_k]
-                # print(f"\t\tsubgroup: {subgroup} = {round(aggr[comb_size][subgroup]['NDCG'][at_k], 2)}")
+                print(f"\t\tsubgroup: {subgroup} = {round(aggr[comb_size][subgroup]['NDCG'][at_k], 2)}")
             print(f"\t\taverage: {avg_subgroup/len(subgroups)}")
 
         for at_k in [3, 5, 10]:
@@ -199,7 +220,7 @@ def average_results(results_dict):
             avg_subgroup = 0
             for subgroup in subgroups:
                 avg_subgroup += aggr[comb_size][subgroup]['PREC'][at_k]
-                # print(f"\t\tsubgroup: {subgroup} = {round(aggr[comb_size][subgroup]['PREC'][at_k], 2)}")
+                print(f"\t\tsubgroup: {subgroup} = {round(aggr[comb_size][subgroup]['PREC'][at_k], 2)}")
             print(f"\t\taverage: {avg_subgroup/len(subgroups)}")
     return aggr
 
@@ -233,8 +254,8 @@ if __name__ == "__main__":
     subgroups = lattice_graph.x_dict.keys()
 
     ## store results
-    # seeds = range(32, 32 + args.seeds_num)
-    seeds = [1, 2, 3]
+    seeds = range(32, 32 + args.seeds_num)
+    # seeds = [1, 2, 3]
     results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
                                 for seed in seeds} for comb_size in args.comb_size_list}
     for seed in seeds:
@@ -242,27 +263,13 @@ if __name__ == "__main__":
         set_seed(seed)
 
         pipeline_obj = PipelineManager(args, lattice_graph)
-        # start_time of training
         pipeline_obj.train_model(seed)
-        # end_time of training
-        ## number of features (self.feature_num), number of records
 
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
 
-        ## save {subgroup: [list of missing features]}
-        with open(f'{args.dir_path}/missing_seed{seed}_{MissingDataConfig.general_missing_prob}.json', 'w') as f:
-            json.dump(pipeline_obj.missing_features_dict, f)
-
 
     avg_res = average_results(results_dict)
-
-    with open(f'{args.dir_path}/results_dict_gnn_grads_ratio{args.sampling_ratio}_missing{MissingDataConfig.general_missing_prob}.json', 'w') as f:
-        json.dump(avg_res, f)
-
-    
-    # python train.py --dir_path=RealWorldData/startup --epochs=500 --sampling_ratio=1.0
-    ### change sampling ratio to 0.25, 0.5, 0.75
 
 
     

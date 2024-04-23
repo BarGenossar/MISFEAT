@@ -217,8 +217,8 @@ class LogicalDatasetGenerator:
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Generate synthetic data for logical formulas')
-    parser.add_argument('--formula', type=str, default='2', help='Index of the formula to be generated')
-    parser.add_argument('--config', type=str, default='2', help='Index of the configuration to be generated')
+    parser.add_argument('--formula', type=str, default='1', help='Index of the formula to be generated')
+    parser.add_argument('--config', type=str, default='1', help='Index of the configuration to be generated')
     args = parser.parse_args()
 
     configs = json.load(open('data_generation_config.json'))

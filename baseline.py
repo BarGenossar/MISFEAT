@@ -139,7 +139,8 @@ if __name__ == '__main__':
 
 
     ## load missing dict
-    seeds = [1, 2, 3]
+    # seeds = [1, 2, 3]
+    seeds = [32, 33, 34]
     results = {subgroup: {metric: {at_k: [0]*len(seeds) for at_k in config.Evaluation.at_k} for metric in ['NDCG', 'PREC']} for subgroup in subgroups}
     for idx, seed in enumerate(seeds):
         with open(f'./RealWorldData/{args.data_name}/missing_seed{seed}_{config.MissingDataConfig.general_missing_prob}.json', 'r') as file:
@@ -182,13 +183,20 @@ if __name__ == '__main__':
 
     for at_k in config.Evaluation.at_k:
         print(f"\tnDCG @ {at_k}")
+        avg = 0.
         for subgroup in subgroups:
+            avg += sum(results[subgroup]['NDCG'][at_k])/len(results[subgroup]['NDCG'][at_k])
             print(f"\t\tsubgroup: {subgroup} = {round(sum(results[subgroup]['NDCG'][at_k])/len(results[subgroup]['NDCG'][at_k]), 2)}")
+        print(f"\t\tavg: {avg/len(subgroups)}")
 
     for at_k in config.Evaluation.at_k:
         print(f"\tprecision @ {at_k}")
+        avg = 0.
         for subgroup in subgroups:
+            avg += sum(results[subgroup]['PREC'][at_k])/len(results[subgroup]['PREC'][at_k])
             print(f"\t\tsubgroup: {subgroup} = {round(sum(results[subgroup]['PREC'][at_k])/len(results[subgroup]['PREC'][at_k]), 2)}")
+        print(f"\t\tavg: {avg/len(subgroups)}")
+        
 
 
     
