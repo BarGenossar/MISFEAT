@@ -92,7 +92,8 @@ class PipelineManager:
         return tmp_results_dict
 
     def _train_validation_split(self, args):
-        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, args.sampling_ratio)
+        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, self.missing_indices_dict,
+                              args.sampling_ratio, args.sampling_method)
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
         return train_idxs_dict, valid_idxs_dict

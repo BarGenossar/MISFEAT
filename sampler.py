@@ -6,14 +6,15 @@ from sklearn.model_selection import train_test_split
 
 
 class NodeSampler:
-    def __init__(self, config_num, feature_num, non_missing_dict, sampling_ratio):
+    def __init__(self, config_num, feature_num, non_missing_dict, missing_indices_dict, sampling_ratio, sampling_method):
         np.random.seed(config_num)
         self.seed = config_num
         self.subgroups = non_missing_dict.keys()
         self.feature_num = feature_num
         self.non_missing_dict = non_missing_dict
+        self.missing_indices_dict = missing_indices_dict
         self.sampling_ratio = sampling_ratio
-        self.sampling_method = Sampling.method
+        self.sampling_method = sampling_method
         self.validation_ratio = Sampling.validation_ratio
         self.sampling_func = self._get_sampling_func_dict()
         self.train_indices_dict, self.val_indices_dict = self._get_samples()
@@ -59,14 +60,16 @@ class NodeSampler:
     def _uniform_sampling(self):
         indices = dict()
         for subgroup in self.subgroups:
-            missing_features = [int(feat.split('_')[-1]) for feat in self.missing_indices_dict[subgroup].keys() if 'f_' in feat]
-            non_missing_features = sorted(list( set(range(self.feature_num)) - set(missing_features) ))
-            num_samples = int(self.sampling_ratio * (2**len(non_missing_features) - 1))
+            missing_features = [int(feat.split('_')[-1]) for feat in self.missing_indices_dict[subgroup].keys() if
+                                'f_' in feat]
+            non_missing_features = sorted(list(set(range(self.feature_num)) - set(missing_features)))
+            num_samples = int(self.sampling_ratio * (2 ** len(non_missing_features) - 1))
             ## sample a starting node
-            random_features = np.random.choice([0, 1], size=len(non_missing_features), p=[0.5, 0.5])   # for each non-missing features, select it with prob 0.5
+            random_features = np.random.choice([0, 1], size=len(non_missing_features),
+                                               p=[0.5, 0.5])  # for each non-missing features, select it with prob 0.5
             start_node = [0] * self.feature_num
             for idx, bit in enumerate(random_features):
-                start_node[self.feature_num-1 - non_missing_features[idx]] = bit
+                start_node[self.feature_num - 1 - non_missing_features[idx]] = bit
             start_node = ''.join([str(bit) for bit in start_node])
             ## random walk in the hypercube
             strings = [start_node]
@@ -74,7 +77,7 @@ class NodeSampler:
                 self._random_walk(strings, non_missing_features)
 
             indices[subgroup] = list(map(lambda bstr: int(bstr, 2), strings))
-            
+
         return indices
 
     def _gibbs_sampling(self):
