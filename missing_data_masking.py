@@ -16,14 +16,14 @@ class MissingDataMasking:
 
     def _set_missing_indices_dict(self):
         missing_indices_dict = {subgroup: dict() for subgroup in self.subgroups}
-        binary_vecs = [convert_decimal_to_binary(i, self.feature_num) for i in range(2**self.feature_num)]
+        binary_vecs = [convert_decimal_to_binary(i+1, self.feature_num) for i in range(2**self.feature_num+1)]
         if self.manual:
             return self._get_manual_missing_indices_dict(missing_indices_dict, binary_vecs)
         else:
             return self._get_random_missing_indices_dict(missing_indices_dict, binary_vecs)
 
     def _get_feature_indices(self, feature_idx, binary_vecs):
-        return [i - 1 for i in range(len(binary_vecs)) if binary_vecs[i][self.feature_num - feature_idx - 1] == '1']
+        return [i for i in range(len(binary_vecs)) if binary_vecs[i][self.feature_num - feature_idx - 1] == '1']
 
     def _get_manual_missing_indices_dict(self, missing_indices_dict, binary_vecs):
         for subgroup in self.subgroups:
