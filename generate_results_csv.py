@@ -21,7 +21,7 @@ def update_results_dict(results_dict, tmp_dict, eval_metrics, at_k, comb_size):
     return results_dict
 
 
-def generate_df(dir_path, final_config_dict, eval_metrics, comb_size_list, at_k):
+def generate_df(dir_path, final_config_dict, eval_metrics, comb_size_list, at_k, model):
     data = []
     index = []
     columns = [f"comb_size={comb_size}" for comb_size in comb_size_list]
@@ -31,7 +31,7 @@ def generate_df(dir_path, final_config_dict, eval_metrics, comb_size_list, at_k)
             index.append(f"{eval_metric}@{k}")
             data.append([final_config_dict[eval_metric][k][comb_size] for comb_size in comb_size_list])
     df = pd.DataFrame(data, index=index, columns=columns)
-    df.to_csv(f"{dir_path}Config{config_idx}_sampling={sampling_ratio}_missing_ratio={missing_prob}.csv")
+    df.to_csv(f"{dir_path}Model={model}_Config{config_idx}_sampling={sampling_ratio}_missing_ratio={missing_prob}.csv")
     return
 
 
@@ -45,6 +45,7 @@ if __name__ == "__main__":
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
     parser.add_argument('--dir_path', type=str, default='GeneratedData/', help='Path to the results directory')
+    parser.add_argument('--model', type=str, default='GNN', help='Path to the results directory')
     args = parser.parse_args()
 
 
@@ -53,6 +54,7 @@ if __name__ == "__main__":
     missing_prob = args.missing_prob
     sampling_ratio = args.sampling_ratio
     seeds_num = args.seeds_num
+    model = args.model
     eval_metrics = Evaluation.eval_metrics
     comb_size_list = args.comb_size_list
     at_k = verify_at_k(args.at_k)
@@ -64,8 +66,12 @@ if __name__ == "__main__":
                                for eval_metric in eval_metrics}
         for formula_idx in formula_idx_list:
             for comb_size in args.comb_size_list:
-                pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
-                            f"sampling={sampling_ratio}|missing_ratio={missing_prob}.pkl")
+                if model == 'GNN':
+                    pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
+                                f"sampling={sampling_ratio}|missing_ratio={missing_prob}.pkl")
+                else:
+                    pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
+                                f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
                 tmp_dict = pd.read_pickle(pkl_path)
                 config_results_dict = update_results_dict(config_results_dict, tmp_dict, eval_metrics, at_k, comb_size)
         subgroup_num = len(tmp_dict.keys())
@@ -73,5 +79,5 @@ if __name__ == "__main__":
                                                                 (subgroup_num*len(formula_idx_list)), 3)
                                                for comb_size in comb_size_list}
                                            for k in at_k} for eval_metric in eval_metrics}
-        generate_df(dir_path, final_config_dict, eval_metrics, comb_size_list, at_k)
+        generate_df(dir_path, final_config_dict, eval_metrics, comb_size_list, at_k, model)
 
