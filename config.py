@@ -1,8 +1,9 @@
 
 class LatticeGeneration:
     formula_idx = 1
-    hyperparams_idx = 1
-    min_k = 1
+    hyperparams_idx = 3
+    min_m = 3
+    max_m = 4
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
@@ -16,8 +17,8 @@ class MissingDataConfig:
 
 
 class Sampling:
-    method = 'random'
-    sampling_ratio = 1.0
+    method = 'uniform'
+    sampling_ratio = 0.5
     validation_ratio = 0.2
 
 
@@ -28,6 +29,7 @@ class GNN:
     p_dropout = 0
     epochs = 300
     epochs_stable_val = 5
+
 
 class MLP:
     hidden_channels = 64
