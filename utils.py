@@ -57,6 +57,14 @@ def convert_comb_to_binary(comb, feature_num):
     return binary[::-1]
 
 
+def get_min_k(min_m, num_layers):
+    return max(1, min_m-num_layers)
+
+
+def get_max_k(max_m, num_layers, feature_num):
+    return min(feature_num, max_m+num_layers)
+
+
 def get_lattice_nodes_num(feature_num, max_subset_size):
     return sum([math.comb(feature_num, i) for i in range(1, max_subset_size + 1)])
 
@@ -191,7 +199,7 @@ def save_results(test_results, dir_path, comb_size_list, args):
         os.makedirs(dir_path)
     for comb_size in comb_size_list:
         results_path = dir_path + (f'results_size={comb_size}|sampling={args.sampling_ratio}'
-                                   f'|missing_ratio={args.missing_prob}.pkl')
+                                   f'|missing_ratio={args.missing_prob}|sampling_method={args.sampling_method}.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
