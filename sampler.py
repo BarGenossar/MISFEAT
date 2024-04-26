@@ -23,9 +23,8 @@ class NodeSampler:
 
     def _get_sampling_func_dict(self):
         sampling_funcs = {
-            'random': self._random_sampling,
-            'uniform': self._uniform_sampling,
-            # 'gibbs': self._gibbs_sampling,
+            'arbitrary': self._arbitrary_sampling,
+            'randwalk': self._uniform_sampling,
         }
         if self.sampling_method not in sampling_funcs:
             raise ValueError(f"Invalid sampling method: {self.sampling_method}")
@@ -43,7 +42,7 @@ class NodeSampler:
             val_indices_dict[g_id] = val_indices
         return train_indices_dict, val_indices_dict
 
-    def _random_sampling(self):
+    def _arbitrary_sampling(self):
         sampled_indices_dict = dict()
         for g_id in self.subgroups:
             num_samples = int(self.sampling_ratio * len(self.non_missing_dict[g_id]))
@@ -81,6 +80,3 @@ class NodeSampler:
             indices[subgroup] = list(map(lambda bstr: int(bstr, 2), strings))
 
         return indices
-
-    def _gibbs_sampling(self):
-        f""" TBD """
