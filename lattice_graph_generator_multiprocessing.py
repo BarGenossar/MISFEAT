@@ -22,10 +22,11 @@ class FeatureLatticeGraph:
         self.tqdm = args.print_tqdm
         self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
-        self.min_k = get_min_k(args.min_m, args.num_layers)
-        self.max_k = get_max_k(args.max_m, args.num_layers, self.feature_num)
+        self.min_level = get_min_level(args.min_m, args.num_layers)
+        self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
         self.subgroups_num = self.dataset['subgroup'].nunique()
         self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count() - 4))
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.max_level)
         self.mappings_dict = self._create_mappings_dict()
         self.graph = self._create_multiple_feature_lattice()
         self.save(dataset_path)
@@ -44,7 +45,8 @@ class FeatureLatticeGraph:
                                                    y_series=y_series), range(self.subgroups_num)))
         end = time.time()
         print(f"Mapping dictionary generation time: {round(end - start, 4)} seconds\n ========================\n")
-        return self._convert_mappings_list_to_dict(mappings_list)
+        mappings_dict = self._convert_mappings_list_to_dict(mappings_list)
+        return mappings_dict
 
     @staticmethod
     def _convert_mappings_list_to_dict(mappings_list):
@@ -55,7 +57,7 @@ class FeatureLatticeGraph:
 
     def _process_gid_mapping_dict(self, g_id, dataframe, y_series):
         mappings_dict, prev_tmp_dict = self._initialize_tmp_dict(g_id, dataframe, y_series)
-        for comb_size in range(self.min_k + 1, self.max_k + 1):
+        for comb_size in range(self.min_level + 1, self.max_level + 1):
             mappings_dict, prev_tmp_dict = self._create_comb_size_mappings_dict(g_id, mappings_dict, comb_size,
                                                                                 dataframe, y_series, prev_tmp_dict)
         return mappings_dict
@@ -79,7 +81,9 @@ class FeatureLatticeGraph:
         score = round(mutual_info_score(tmp_series, y_series), 6)
         binary_vec = convert_comb_to_binary(comb, self.feature_num)
         node_id = convert_binary_to_decimal(binary_vec) - 1
-        return {comb: {'score': score, 'binary_vector': binary_vec, 'node_id': node_id, 'tmp_series': tmp_series}}
+        restricted_node_id = self.restricted_graph_idxs_mapping[node_id]
+        return {comb: {'score': score, 'binary_vector': binary_vec, 'node_id': node_id,
+                       'tmp_series': tmp_series, 'restricted_node_id': restricted_node_id}}
 
     @staticmethod
     def _update_comb_dicts(g_id, mappings_dict, comb_size, comb_property_list):
@@ -89,13 +93,14 @@ class FeatureLatticeGraph:
             mappings_dict[g_id][comb_size][comb]['score'] = comb_dict[comb]['score']
             mappings_dict[g_id][comb_size][comb]['binary_vector'] = comb_dict[comb]['binary_vector']
             mappings_dict[g_id][comb_size][comb]['node_id'] = comb_dict[comb]['node_id']
+            mappings_dict[g_id][comb_size][comb]['restricted_node_id'] = comb_dict[comb]['restricted_node_id']
             new_tmp_dict[comb] = comb_dict[comb]['tmp_series']
         return mappings_dict, new_tmp_dict
 
     def _initialize_tmp_dict(self, g_id, dataframe, y_series):
         mappings_dict = {g_id: {1: defaultdict(dict)}}
         prev_tmp_dict = dict()
-        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_k))
+        feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_level))
         rel_idxs = dataframe[dataframe['subgroup'] == str(g_id)].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
@@ -119,19 +124,19 @@ class FeatureLatticeGraph:
 
     def _get_node_features_and_labels(self, data):
         print(f"Getting the node features and labels...\n ------------------\n")
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_level, self.max_level)
         with multiprocessing.Pool(processes=self.cores_to_use) as pool:
            gid_nodes_dict_list = list(pool.imap(partial(self._get_gid_nodes, lattice_nodes_num=lattice_nodes_num),
                                                 range(self.subgroups_num)))
         return self._convert_gid_nodes_to_data(gid_nodes_dict_list, data)
 
     def _get_gid_nodes(self, g_id, lattice_nodes_num):
-        x_tensor = torch.zeros(lattice_nodes_num, self.feature_num, dtype=torch.float)
-        y_tensor = torch.zeros(lattice_nodes_num, dtype=torch.float)
-        for comb_size in range(self.min_k, self.max_k + 1):
+        x_tensor = torch.zeros(len(self.restricted_graph_idxs_mapping), self.feature_num, dtype=torch.float)
+        y_tensor = torch.zeros(len(self.restricted_graph_idxs_mapping), dtype=torch.float)
+        for comb_size in range(self.min_level, self.max_level + 1):
             combs = self.mappings_dict[g_id][comb_size].keys()
             for comb in tqdm.tqdm(combs) if self.tqdm else combs:
-                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                node_id = self.mappings_dict[g_id][comb_size][comb]['restricted_node_id']
                 x_tensor[node_id] = torch.tensor([int(digit) for digit in
                                                   self.mappings_dict[g_id][comb_size][comb]['binary_vector']])
                 y_tensor[node_id] = self.mappings_dict[g_id][comb_size][comb]['score']
@@ -162,28 +167,16 @@ class FeatureLatticeGraph:
         print(f"Getting the inter-level edges...\n ------------------\n")
         edge_index = []
         g_id = 0
-        for comb_size in range(self.min_k, self.max_k):
+        for comb_size in range(self.min_level, self.max_level):
             for comb in self.mappings_dict[g_id][comb_size]:
-                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                node_id = self.mappings_dict[g_id][comb_size][comb]['restricted_node_id']
                 for next_comb in self.mappings_dict[g_id][comb_size + 1]:
                     if set(comb).issubset(set(next_comb)):
-                        next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
+                        next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['restricted_node_id']
                         edge_index.append([node_id, next_node_id])
                         edge_index.append([next_node_id, node_id])
         return edge_index
 
-    # def _get_gid_inter_level_edges(self, g_id):
-    #     edge_index = []
-    #     for comb_size in range(1, self.feature_num):
-    #         combs = self.mappings_dict[g_id][comb_size].keys()
-    #         for comb in tqdm.tqdm(combs) if self.tqdm else combs:
-    #             node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
-    #             for next_comb in self.mappings_dict[g_id][comb_size + 1]:
-    #                 if set(comb).issubset(set(next_comb)):
-    #                     next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['node_id']
-    #                     edge_index.append([node_id, next_node_id])
-    #                     edge_index.append([next_node_id, node_id])
-    #     return {f"g{g_id}": {'edge_index': edge_index, 'edge_name': self._get_edge_name(g_id, g_id)}}
 
     @staticmethod
     def _convert_gid_inter_edges_to_data(gid_inter_edges_dict_list, data):
@@ -204,35 +197,18 @@ class FeatureLatticeGraph:
         print(f"Getting the intra-level edges...\n ------------------\n")
         g_id = 0
         edge_set = set()
-        for comb_size in range(max(2, self.min_k), self.max_k + 1):
+        for comb_size in range(max(2, self.min_level), self.max_level + 1):
             for comb in self.mappings_dict[g_id][comb_size]:
-                node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
+                node_id = self.mappings_dict[g_id][comb_size][comb]['restricted_node_id']
                 for next_comb in self.mappings_dict[g_id][comb_size]:
                     # Check if the overlapping between the two combinations is at size comb_size - 1
                     if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
                         if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
                             edge_set.add((comb, next_comb))
-                            next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
+                            next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['restricted_node_id']
                             edge_index.append([node_id, next_node_id])
                             edge_index.append([next_node_id, node_id])
         return edge_index
-
-    # def _get_gid_intra_level_edges(self, g_id):
-    #     edge_set = set()
-    #     edge_index = []
-    #     for comb_size in range(2, self.feature_num + 1):
-    #         combs = self.mappings_dict[g_id][comb_size].keys()
-    #         for comb in tqdm.tqdm(combs) if self.tqdm else combs:
-    #             node_id = self.mappings_dict[g_id][comb_size][comb]['node_id']
-    #             for next_comb in self.mappings_dict[g_id][comb_size]:
-    #                 # Check if the overlapping between the two combinations is at size comb_size - 1
-    #                 if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
-    #                     if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
-    #                         edge_set.add((comb, next_comb))
-    #                         next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['node_id']
-    #                         edge_index.append([node_id, next_node_id])
-    #                         edge_index.append([next_node_id, node_id])
-    #     return {f"g{g_id}": {'edge_index': edge_index, 'edge_name': self._get_edge_name(g_id, g_id)}}
 
     @staticmethod
     def _convert_gid_intra_edges_to_data(gid_intra_edges_dict_list, data):
@@ -244,7 +220,7 @@ class FeatureLatticeGraph:
         return data
 
     def _get_inter_lattice_edges(self, data):
-        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.feature_num)
+        lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_level, self.max_level)
         edge_index = [[node_id, node_id] for node_id in range(lattice_nodes_num)]
         for g_id1 in range(self.subgroups_num):
             for g_id2 in range(g_id1 + 1, self.subgroups_num):
@@ -282,7 +258,7 @@ if __name__ == "__main__":
                         help='add attributes to the edges')
     parser.add_argument('--is_synthetic', type=bool, default=True, help='whether the dataset is synthetic or real-world')
     parser.add_argument('--dataset_path', type=str, default=None, help='path to the dataset file')
-    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
+    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
     if args.dataset_path is None:
@@ -297,4 +273,4 @@ if __name__ == "__main__":
     lattice = FeatureLatticeGraph(dataset_path, args)
     end = time.time()
     print(f"Total time: {round(end - start, 4)} seconds")
-    print(f"/n ============================================================/n")
+    print(f"\n ============================================================\n")
