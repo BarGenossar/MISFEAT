@@ -169,13 +169,15 @@ class FeatureLatticeGraph:
         edge_index = []
         g_id = 0
         for comb_size in range(self.min_level, self.max_level):
-            for comb in self.mappings_dict[g_id][comb_size]:
-                node_id = self.mappings_dict[g_id][comb_size][comb]['restricted_node_id']
-                for next_comb in self.mappings_dict[g_id][comb_size + 1]:
-                    if set(comb).issubset(set(next_comb)):
-                        next_node_id = self.mappings_dict[g_id][comb_size + 1][next_comb]['restricted_node_id']
-                        edge_index.append([node_id, next_node_id])
-                        edge_index.append([next_node_id, node_id])
+            comb_size_mapping = self.mappings_dict[g_id][comb_size]
+            next_comb_size_mapping = self.mappings_dict[g_id][comb_size + 1]
+            for comb, comb_info in comb_size_mapping.items():
+                comb_set = set(comb)
+                node_id = comb_info['restricted_node_id']
+                for next_comb, next_comb_info in next_comb_size_mapping.items():
+                    if comb_set.issubset(set(next_comb)):
+                        next_node_id = next_comb_info['restricted_node_id']
+                        edge_index.extend([[node_id, next_node_id], [next_node_id, node_id]])
         return edge_index
 
 
