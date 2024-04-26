@@ -1,13 +1,14 @@
 
 class LatticeGeneration:
-    formula_idx = 1
-    hyperparams_idx = 3
+    formula_idx = 2
+    hyperparams_idx = 1
     min_m = 3
     max_m = 4
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
     num_workers = 5  # Number of workers for multiprocessing
+    edge_sampling_ratio = 0.5
 
 
 class MissingDataConfig:
@@ -17,7 +18,7 @@ class MissingDataConfig:
 
 
 class Sampling:
-    method = 'uniform'
+    method = 'random'
     sampling_ratio = 0.5
     validation_ratio = 0.2
 

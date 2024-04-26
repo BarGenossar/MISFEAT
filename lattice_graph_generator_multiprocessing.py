@@ -24,6 +24,7 @@ class FeatureLatticeGraph:
         self.feature_num = self.dataset.shape[1] - 2
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
+        self.edge_sampling_ratio = args.edge_sampling_ratio
         self.subgroups_num = self.dataset['subgroup'].nunique()
         self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count() - 4))
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.max_level)
@@ -198,16 +199,19 @@ class FeatureLatticeGraph:
         g_id = 0
         edge_set = set()
         for comb_size in range(max(2, self.min_level), self.max_level + 1):
-            for comb in self.mappings_dict[g_id][comb_size]:
-                node_id = self.mappings_dict[g_id][comb_size][comb]['restricted_node_id']
-                for next_comb in self.mappings_dict[g_id][comb_size]:
-                    # Check if the overlapping between the two combinations is at size comb_size - 1
-                    if len(set(comb).intersection(set(next_comb))) == comb_size - 1:
-                        if (next_comb, comb) not in edge_set and (comb, next_comb) not in edge_set:
-                            edge_set.add((comb, next_comb))
-                            next_node_id = self.mappings_dict[g_id][comb_size][next_comb]['restricted_node_id']
-                            edge_index.append([node_id, next_node_id])
-                            edge_index.append([next_node_id, node_id])
+            comb_size_mapping = self.mappings_dict[g_id][comb_size]
+            for comb, comb_info in comb_size_mapping.items():
+                node_id = comb_info['restricted_node_id']
+                comb_set = set(comb)
+                for next_comb, next_comb_info in comb_size_mapping.items():
+                    if np.random.rand() > self.edge_sampling_ratio:
+                        continue
+                    if len(comb_set.intersection(set(next_comb))) == comb_size - 1:
+                        if (next_comb, comb) in edge_set:
+                            continue
+                        edge_set.update([(comb, next_comb), (next_comb, comb)])
+                        next_node_id = next_comb_info['restricted_node_id']
+                        edge_index.extend([[node_id, next_node_id], [next_node_id, node_id]])
         return edge_index
 
     @staticmethod
@@ -250,7 +254,9 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, default=LatticeGeneration.hyperparams_idx, help='index of configuration')
     parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
+    parser.add_argument('--edge_sampling_ratio', type=float, default=LatticeGeneration.edge_sampling_ratio)
     parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
+
     parser.add_argument('--within_level', type=bool, default=LatticeGeneration.within_level_edges,
                         help='add edges within the same level')
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
