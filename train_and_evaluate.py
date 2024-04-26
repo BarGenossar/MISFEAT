@@ -46,7 +46,10 @@ class PipelineManager:
         self.at_k = verify_at_k(args.at_k)
         self.dataset_path, self.graph_path, self.dir_path = read_paths(args)
         self.lattice_graph, self.subgroups = self._load_graph_information()
-        self.feature_num = int(np.log2(len(self.lattice_graph['g0']['x']) + 1))
+        self.feature_num = self.lattice_graph['g0'].x.shape[1]
+        self.min_level = get_min_level(args.min_m, args.num_layers)
+        self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.max_level)
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
@@ -63,7 +66,8 @@ class PipelineManager:
             return missing_indices_dict
         else:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
-                                                      self.args.missing_prob, self.args.manual_md).missing_indices_dict
+                                                      self.args.missing_prob, self.restricted_graph_idxs_mapping,
+                                                      self.args.manual_md).missing_indices_dict
             with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
@@ -93,7 +97,7 @@ class PipelineManager:
 
     def _train_validation_split(self, args):
         sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, self.missing_indices_dict,
-                              args.sampling_ratio, args.sampling_method)
+                              self.restricted_graph_idxs_mapping, args.sampling_ratio, args.sampling_method)
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
         return train_idxs_dict, valid_idxs_dict
@@ -152,7 +156,7 @@ class PipelineManager:
                     break
                 loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
                 if epoch == 1 or epoch % 5 == 0:
-                    # print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                    print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
                     if not self.args.save_model:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
@@ -190,6 +194,8 @@ if __name__ == "__main__":
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--is_synthetic', type=bool, default=True,
                         help='whether the dataset is synthetic or real-world')
+    parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
+    parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
     parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')

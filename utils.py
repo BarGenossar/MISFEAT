@@ -35,7 +35,6 @@ def Kendall_tau(rank_true: t.List[int], rank_pred: t.List[int]) -> int:
     return inversions
 
 
-
 def convert_binary_to_decimal(binary):
     return int(binary, 2)
 
@@ -57,16 +56,22 @@ def convert_comb_to_binary(comb, feature_num):
     return binary[::-1]
 
 
-def get_min_k(min_m, num_layers):
+def get_min_level(min_m, num_layers):
     return max(1, min_m-num_layers)
 
 
-def get_max_k(max_m, num_layers, feature_num):
+def get_max_level(max_m, num_layers, feature_num):
     return min(feature_num, max_m+num_layers)
 
 
-def get_lattice_nodes_num(feature_num, max_subset_size):
-    return sum([math.comb(feature_num, i) for i in range(1, max_subset_size + 1)])
+def get_lattice_nodes_num(feature_num, min_level, max_level):
+    return sum([math.comb(feature_num, i) for i in range(min_level, max_level + 1)])
+
+
+def get_restricted_graph_idxs_mapping(feature_num=None, max_m=None):
+    binary_vecs = [convert_decimal_to_binary(i + 1, feature_num) for i in range(2 ** feature_num - 1)]
+    rel_indices = [i for i, binary_vec in enumerate(binary_vecs) if binary_vec.count('1') <= max_m]
+    return {orig_ind: new_ind for new_ind, orig_ind in enumerate(rel_indices)}
 
 
 def get_lattice_edges_num(feature_num, max_subset_size, within_levels=True):

@@ -6,13 +6,15 @@ from sklearn.model_selection import train_test_split
 
 
 class NodeSampler:
-    def __init__(self, config_num, feature_num, non_missing_dict, missing_indices_dict, sampling_ratio, sampling_method):
+    def __init__(self, config_num, feature_num, non_missing_dict, missing_indices_dict, restricted_graph_idxs_mapping,
+                 sampling_ratio, sampling_method):
         np.random.seed(config_num)
         self.seed = config_num
         self.subgroups = non_missing_dict.keys()
         self.feature_num = feature_num
         self.non_missing_dict = non_missing_dict
         self.missing_indices_dict = missing_indices_dict
+        self.restricted_graph_idxs_mapping = restricted_graph_idxs_mapping
         self.sampling_ratio = sampling_ratio
         self.sampling_method = sampling_method
         self.validation_ratio = Sampling.validation_ratio

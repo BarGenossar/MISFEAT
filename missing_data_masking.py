@@ -4,11 +4,12 @@ from utils import convert_decimal_to_binary
 
 
 class MissingDataMasking:
-    def __init__(self, feature_num, subgroups, config_num, general_missing_prob, manual=False):
+    def __init__(self, feature_num, subgroups, config_num, general_missing_prob, restricted_graph_idxs_mapping, manual):
         np.random.seed(config_num)
         self.seed = config_num
         self.feature_num = feature_num
         self.subgroups = subgroups
+        self.restricted_graph_idxs_mapping = restricted_graph_idxs_mapping
         self.manual = manual
         self.general_missing_prob = general_missing_prob
         self.max_missing_ratio = MissingDataConfig.max_missing_ratio
@@ -16,7 +17,8 @@ class MissingDataMasking:
 
     def _set_missing_indices_dict(self):
         missing_indices_dict = {subgroup: dict() for subgroup in self.subgroups}
-        binary_vecs = [convert_decimal_to_binary(i+1, self.feature_num) for i in range(2**self.feature_num+1)]
+        binary_vecs = [convert_decimal_to_binary(i+1, self.feature_num) for i in
+                       self.restricted_graph_idxs_mapping.keys()]
         if self.manual:
             return self._get_manual_missing_indices_dict(missing_indices_dict, binary_vecs)
         else:
