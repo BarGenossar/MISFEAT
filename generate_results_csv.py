@@ -44,7 +44,8 @@ if __name__ == "__main__":
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
-    parser.add_argument('--dir_path', type=str, default='GeneratedData/', help='Path to the results directory')
+    # parser.add_argument('--dir_path', type=str, default='GeneratedData/', help='Path to the results directory')
+    parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
     parser.add_argument('--model', type=str, default='GNN', help='Path to the results directory')
     args = parser.parse_args()
 
@@ -57,8 +58,11 @@ if __name__ == "__main__":
     model = args.model
     eval_metrics = Evaluation.eval_metrics
     comb_size_list = args.comb_size_list
-    at_k = verify_at_k(args.at_k)
-    dir_path = args.dir_path
+    at_k = args.at_k if isinstance(args.at_k, list) else [args.at_k]
+    if args.data_name == 'synthetic':
+        dir_path = 'GeneratedData/'
+    else:
+        dir_path = f'RealWorldData/{args.data_name}/'
 
 
     for config_idx in config_idx_list:
@@ -67,11 +71,21 @@ if __name__ == "__main__":
         for formula_idx in formula_idx_list:
             for comb_size in args.comb_size_list:
                 if model == 'GNN':
-                    pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
-                                f"sampling={sampling_ratio}|missing_ratio={missing_prob}.pkl")
+                    if args.data_name == 'synthetic':
+                        pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
+                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}|"
+                                    f"sampling_method={args.sampling_method}.pkl")
+                    else:
+                        pkl_path = (f"{dir_path}results_size={comb_size}|"
+                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}|"
+                                    f"sampling_method={args.sampling_method}.pkl")
                 else:
-                    pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
-                                f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
+                    if args.data_name == 'synthetic':
+                        pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
+                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
+                    else:
+                        pkl_path = (f"{dir_path}results_size={comb_size}|"
+                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
                 tmp_dict = pd.read_pickle(pkl_path)
                 config_results_dict = update_results_dict(config_results_dict, tmp_dict, eval_metrics, at_k, comb_size)
         subgroup_num = len(tmp_dict.keys())

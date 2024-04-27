@@ -12,7 +12,7 @@ class LatticeGeneration:
 
 
 class MissingDataConfig:
-    missing_prob = 0.1
+    missing_prob = 0.2
     max_missing_ratio = 0.6
     missing_rate_dict = {'relevant': 0.2, 'correlated': 0.2, 'redundant': 0.2, 'noisy': 0.2}
 
