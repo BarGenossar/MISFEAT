@@ -70,22 +70,14 @@ if __name__ == "__main__":
                                for eval_metric in eval_metrics}
         for formula_idx in formula_idx_list:
             for comb_size in args.comb_size_list:
-                if model == 'GNN':
-                    if args.data_name == 'synthetic':
-                        pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
-                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}|"
-                                    f"sampling_method={args.sampling_method}.pkl")
-                    else:
-                        pkl_path = (f"{dir_path}results_size={comb_size}|"
-                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}|"
-                                    f"sampling_method={args.sampling_method}.pkl")
+                if args.data_name == 'synthetic':
+                    pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}_"
+                                f"sampling={sampling_ratio}_missing_ratio={missing_prob}_"
+                                f"sampling_method={args.sampling_method}_model={model}.pkl")
                 else:
-                    if args.data_name == 'synthetic':
-                        pkl_path = (f"{dir_path}Formula{formula_idx}/Config{config_idx}/results_size={comb_size}|"
-                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
-                    else:
-                        pkl_path = (f"{dir_path}results_size={comb_size}|"
-                                    f"sampling={sampling_ratio}|missing_ratio={missing_prob}_MLPModel.pkl")
+                    pkl_path = (f"{dir_path}results_size={comb_size}_"
+                                f"sampling={sampling_ratio}_missing_ratio={missing_prob}_"
+                                f"sampling_method={args.sampling_method}_model={model}.pkl")
                 tmp_dict = pd.read_pickle(pkl_path)
                 config_results_dict = update_results_dict(config_results_dict, tmp_dict, eval_metrics, at_k, comb_size)
         subgroup_num = len(tmp_dict.keys())
