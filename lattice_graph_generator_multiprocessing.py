@@ -265,7 +265,7 @@ if __name__ == "__main__":
     parser.add_argument('--with_edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
     parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
-    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
+    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
     if args.data_name == 'synthetic':

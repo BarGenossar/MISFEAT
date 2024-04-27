@@ -199,9 +199,10 @@ if __name__ == "__main__":
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
+    parser.add_argument('--edge_sampling_ratio', type=float, default=LatticeGeneration.edge_sampling_ratio)
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--data_name', type=str, default='synthetic', help='options:{synthetic, loan, startup, mobile}')
+    parser.add_argument('--data_name', type=str, default='mobile', help='options:{synthetic, loan, startup, mobile}')
     parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     args = parser.parse_args()
 
@@ -218,5 +219,5 @@ if __name__ == "__main__":
         pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
-    save_results(results_dict, pipeline_obj.dir_path, args.comb_size_list, args)
+    save_results(results_dict, pipeline_obj.dir_path, args)
 

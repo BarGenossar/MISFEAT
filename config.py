@@ -18,7 +18,7 @@ class MissingDataConfig:
 
 
 class Sampling:
-    method = 'randwalk'
+    method = 'randwalk'  # ['arbitrary', 'randwalk']
     sampling_ratio = 0.5
     validation_ratio = 0.2
 
@@ -45,5 +45,5 @@ class Evaluation:
     at_k = [3, 5, 10]
     comb_size_list = [3, 4, 5]
     eval_metrics = ['NDCG', 'PREC']
-    formula_idx_list = [1]
-    config_idx_list = [1]
+    formula_idx_list = [1, 2, 3, 4, 5]
+    config_idx_list = [1, 2, 3, 4]

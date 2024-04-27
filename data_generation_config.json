@@ -33,7 +33,7 @@
     "hyperparams": {
         "1": {
             "subgroups_num": 4,
-            "feature_num": 10,
+            "feature_num": 15,
             "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
             "correlated_num": 2,
@@ -48,7 +48,7 @@
         },
         "2": {
             "subgroups_num": 4,
-            "feature_num": 10,
+            "feature_num": 15,
             "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
             "correlated_num": 2,
@@ -63,7 +63,7 @@
         },
         "3": {
             "subgroups_num": 4,
-            "feature_num": 15,
+            "feature_num": 18,
             "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
             "correlated_num": 2,
@@ -78,7 +78,7 @@
         },
         "4": {
             "subgroups_num": 4,
-            "feature_num": 15,
+            "feature_num": 18,
             "feature_range": [0, 1, 2, 3],
             "redundant_num": 2,
             "correlated_num": 2,
