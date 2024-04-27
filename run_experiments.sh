@@ -23,7 +23,7 @@ for dataset_name in "${dataset_name_list[@]}"; do
         for edge_sampling_ratio in "${edge_sampling_ratio_list[@]}"; do
           for sampling_ratio in "${sampling_ratio_list[@]}"; do
             if [ $dataset_name != "synthetic" ]; then
-                echo "Running on dataset $dataset_name, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio"
+                echo "Running on dataset $dataset_name, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio model $model"
 
                 python train_and_evaluate.py --sampling_ratio $sampling_ratio --missing_prob $missing_prob \
                       --edge_sampling_ratio $edge_sampling_ratio --data_name $dataset_name --model $model \
@@ -32,7 +32,7 @@ for dataset_name in "${dataset_name_list[@]}"; do
             else
               for j in "${configs[@]}"; do
                 for i in "${formulas[@]}"; do
-                  echo "Running on  config $j, formula $i, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio"
+                  echo "Running on  config $j, formula $i, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio model $model"
                   python train_and_evaluate.py --formula $i --config $j --sampling_ratio $sampling_ratio --model $model \
                         --missing_prob $missing_prob --data_name $dataset_name --sampling_method $sampling_method \
                         --edge_sampling_ratio $edge_sampling_ratio

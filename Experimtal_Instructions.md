@@ -33,10 +33,27 @@ The following parameter lists are defined in the script:
 - sampling_ratios (run the basic experiments 1.0)
 - missing_probs (run the basic experiments with 0.2 0.5)
 - edge_sampling_ratio (for now, use only the value 0.5)
-- gnn models ('SAGE' 'SAGE_HEAD')
+- model_list ('SAGE' 'SAGE_HEAD')
 - sampling_method_list ('randwalk' for now, but it is not significant because sampling_ratio is 1.0 for this setting)
 - Note that for the synthetic datasets, the formula and configs indexes are determined inside the config file.
 
+### MLP Baseline
+**1)** No need to run it.
+**2)** Train and evaluate the MLP baseline:
+
+```bash run_experiments_MLP.sh <dataset_name1> <dataset_name2> ...```
+
+where dataset_name1, dataset_name2, ... are the names of the datasets.
+
+Use the same parameter lists as in the MISFEAT experiments, besides the gnn models list.
+
+**3)** Create the results csv files:
+
+```bash generate_results_csv.sh <dataset_name1> <dataset_name2> ...```
+
+where dataset_name1, dataset_name2, ... are the names of the datasets.
+
+Use the same parameter lists as in the MISFEAT experiments, but set model_list=('MLP') .
 ********************************************************************************
 ********************************************************************************
 ## Section 5.3: Sampling Ratio Analysis

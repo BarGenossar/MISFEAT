@@ -7,7 +7,7 @@ sampling_ratio_list=(1.0)
 missing_prob_list=(0.2)
 edge_sampling_ratio_list=(0.5)
 sampling_method_list=('randwalk')
-gnn_model_list=('SAGE')
+model_list=('MLP')
 
 if [ $# -eq 0 ]; then
     echo "Please Insert Dataset Names as Command Line Arguments"
@@ -18,7 +18,7 @@ dataset_name_list=("$@")
 # echo "Beginning feature selection task with K=$K"
 for dataset_name in "${dataset_name_list[@]}"; do
 
-  for model in "${gnn_model_list[@]}"; do
+  for model in "${model_list[@]}"; do
     for missing_prob in "${missing_prob_list[@]}"; do
       for sampling_method in "${sampling_method_list[@]}"; do
         for sampling_ratio in "${sampling_ratio_list[@]}"; do
