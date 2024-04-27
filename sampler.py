@@ -6,8 +6,9 @@ from sklearn.model_selection import train_test_split
 
 
 class NodeSampler:
-    def __init__(self, min_level, max_level, feature_num, non_missing_dict, missing_indices_dict, restricted_graph_idxs_mapping,
-                 sampling_ratio, sampling_method):
+    def __init__(self, config_idx, min_level, max_level, feature_num, non_missing_dict, missing_indices_dict,
+                 restricted_graph_idxs_mapping, sampling_ratio, sampling_method):
+        np.random.seed(config_idx)
         self.min_level = min_level
         self.max_level = max_level
         self.subgroups = non_missing_dict.keys()
@@ -49,44 +50,38 @@ class NodeSampler:
             nids[gid] = list(np.random.choice(self.non_missing_dict[gid], num_samples, replace=False))
         return nids
 
-    def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> None:
+    def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> list:
         curr_node = node_list[-1]
-        rand_idx = self.feature_num-1 - random.choice(present_bits)
+        rand_idx = self.feature_num-1 - np.random.choice(present_bits)
         rand_bit = np.random.choice(['0', '1'], p=[0.5, 0.5])
-        new_node = curr_node[ : rand_idx] + rand_bit + curr_node[rand_idx + 1 : ]
-        if (new_node != '0' * self.feature_num) \
-            and (new_node not in node_list) \
-            and (self.min_level <= new_node.count('1') <= self.max_level):
+        new_node = curr_node[: rand_idx] + rand_bit + curr_node[rand_idx + 1:]
+        if new_node not in node_list and self.min_level <= new_node.count('1') <= self.max_level:
             node_list.append(new_node)
+        return node_list
 
+    def _get_start_node(self, present_bits):
+        start_node = [0] * self.feature_num
+        while True:
+            random_features = np.random.choice([0, 1], size=len(present_bits), p=[0.5, 0.5])
+            if self.min_level <= sum(random_features) <= self.max_level:
+                break
+        for i, bit in enumerate(random_features):
+            start_node[self.feature_num - 1 - present_bits[i]] = bit
+        return ''.join([str(bit) for bit in start_node])
 
     def _uniform_sampling(self):
-        nids = dict()
+        sampled_nids_dict = dict()
         for subgroup in self.subgroups:
             missing_fids = [int(feat.split('_')[-1]) for feat in self.missing_indices_dict[subgroup].keys() if
-                                'f_' in feat]
+                            'f_' in feat]
             non_missing_fids = sorted(list(set(range(self.feature_num)) - set(missing_fids)))
-
-            # pool_size = 
-
             num_samples = int(self.sampling_ratio * (2 ** len(non_missing_fids) - 1))
-            ## sample a starting node
-            start_node = [0] * self.feature_num
-            while True:
-                random_features = np.random.choice([0, 1], size=len(non_missing_fids), p=[0.5, 0.5])  # for each non-missing features, select it with prob 0.5
-                if self.min_level <= sum(random_features) <= self.max_level: 
-                    break
-            for i, bit in enumerate(random_features):
-                start_node[self.feature_num - 1 - non_missing_fids[i]] = bit
-            start_node = ''.join([str(bit) for bit in start_node])
-            ## random walk in the hypercube
-            node_list = [start_node]
+            node_list = [self._get_start_node(non_missing_fids)]
             while len(node_list) < num_samples:
-                self._random_walk(node_list, non_missing_fids)
-
-            nids[subgroup] = list(map(lambda bstr: int(bstr, 2), node_list))
-
-        return nids
+                node_list = self._random_walk(node_list, non_missing_fids)
+            orig_sampled_nids = list(map(lambda bstr: int(bstr, 2) - 1, node_list))
+            sampled_nids_dict[subgroup] = [self.restricted_graph_idxs_mapping[oid] for oid in orig_sampled_nids]
+        return sampled_nids_dict
     
 
         
