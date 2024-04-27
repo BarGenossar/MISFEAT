@@ -3,7 +3,7 @@ class LatticeGeneration:
     formula_idx = 2
     hyperparams_idx = 1
     min_m = 3
-    max_m = 4
+    max_m = 5
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
@@ -12,14 +12,14 @@ class LatticeGeneration:
 
 
 class MissingDataConfig:
-    missing_prob = 0.1
+    missing_prob = 0.2
     max_missing_ratio = 0.6
     missing_rate_dict = {'relevant': 0.2, 'correlated': 0.2, 'redundant': 0.2, 'noisy': 0.2}
 
 
 class Sampling:
-    method = 'random'
-    sampling_ratio = 0.5
+    method = 'randwalk'
+    sampling_ratio = 1.0
     validation_ratio = 0.2
 
 

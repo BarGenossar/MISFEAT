@@ -68,10 +68,10 @@ def get_lattice_nodes_num(feature_num, min_level, max_level):
     return sum([math.comb(feature_num, i) for i in range(min_level, max_level + 1)])
 
 
-def get_restricted_graph_idxs_mapping(feature_num=None, max_m=None):
+def get_restricted_graph_idxs_mapping(feature_num=None, min_m=None, max_m=None):
     binary_vecs = [convert_decimal_to_binary(i + 1, feature_num) for i in range(2 ** feature_num - 1)]
-    rel_indices = [i for i, binary_vec in enumerate(binary_vecs) if binary_vec.count('1') <= max_m]
-    return {orig_ind: new_ind for new_ind, orig_ind in enumerate(rel_indices)}
+    rel_nid = [i for i, binary_vec in enumerate(binary_vecs) if min_m <= binary_vec.count('1') <= max_m]
+    return {orig_nid: new_nid for new_nid, orig_nid in enumerate(rel_nid)}
 
 
 def get_lattice_edges_num(feature_num, max_subset_size, within_levels=True):
@@ -103,10 +103,10 @@ def compute_eval_metrics(ground_truth, preds, test_indices, at_k, comb_size, fea
     return g_results
 
 
-def verify_at_k(at_k):
-    if type(at_k) is not list:
-        at_k = [at_k]
-    return at_k
+# def verify_at_k(at_k):
+#     if type(at_k) is not list:
+#         at_k = [at_k]
+#     return at_k
 
 
 def get_eval_metric_func():
@@ -232,7 +232,6 @@ def save_hyperparams(dir_path, args):
     hyperparams_path = dir_path + 'hyperparams.txt'
     with open(hyperparams_path, 'w') as f:
         f.write(hyperparams)
-    return
 
 
 def print_results(results, at_k, comb_size, subgroup):
@@ -242,18 +241,15 @@ def print_results(results, at_k, comb_size, subgroup):
         for k in at_k:
             print(f'{metric}@{k}: {results[metric][k]}')
         print(5*'-------------------')
-    return
 
 
 def read_paths(args):
-    if args.dir_path is not None:
-        dataset_path = os.path.join(args.dir_path, 'dataset.pkl')
-        graph_path = os.path.join(args.dir_path, 'dataset_hetero_graph.pt')
-    else:
-        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-        graph_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset_hetero_graph.pt"
+    if args.data_name == 'synthetic':
         dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
-    return dataset_path, graph_path, dir_path
+    else:
+        dir_path = f"RealWorldData/{args.data_name}/"
+    graph_path = os.path.join(dir_path, 'dataset_hetero_graph.pt')
+    return graph_path, dir_path
 
 
 def generate_info_string(args, seed):
