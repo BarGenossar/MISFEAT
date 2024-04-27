@@ -4,14 +4,12 @@ from utils import convert_decimal_to_binary
 
 
 class MissingDataMasking:
-    def __init__(self, feature_num, subgroups, config_num, general_missing_prob, restricted_graph_idxs_mapping, manual):
-        np.random.seed(config_num)
-        self.seed = config_num
+    def __init__(self, feature_num, subgroups, config_num, missing_prob, restricted_graph_idxs_mapping, manual):
         self.feature_num = feature_num
         self.subgroups = subgroups
         self.restricted_graph_idxs_mapping = restricted_graph_idxs_mapping
         self.manual = manual
-        self.general_missing_prob = general_missing_prob
+        self.missing_prob = missing_prob
         self.max_missing_ratio = MissingDataConfig.max_missing_ratio
         self.missing_indices_dict = self._set_missing_indices_dict()
 
@@ -34,24 +32,26 @@ class MissingDataMasking:
             # if the input is empty, skip
             if missing_features == ['']:
                 continue
-            for f_idx in missing_features:
-                missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(int(f_idx), binary_vecs)
+            for fid in missing_features:
+                missing_indices_dict[subgroup][f'f_{fid}'] = self._get_feature_indices(int(fid), binary_vecs)
             missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
         return missing_indices_dict
 
     def _get_random_missing_indices_dict(self, missing_indices_dict, binary_vecs):
+        counts = {fid: 0 for fid in range(self.feature_num)}    ## count to ensure a feature is not missing across all subgroups
         for subgroup in self.subgroups:
-            for f_idx in range(self.feature_num):
+            for fid in range(self.feature_num):
                 if len(missing_indices_dict[subgroup]) > self.max_missing_ratio * self.feature_num:
                     break
-                if np.random.rand() < self.general_missing_prob:
-                    missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
+                if np.random.rand() < self.missing_prob and counts[fid] < len(self.subgroups) - 1:
+                    missing_indices_dict[subgroup][f'f_{fid}'] = self._get_feature_indices(fid, binary_vecs)
+                    counts[fid] += 1
             missing_indices_dict = self._handle_non_missing_indices(missing_indices_dict, subgroup, binary_vecs)
             missing_indices_dict[subgroup]['all'] = list(set().union(*missing_indices_dict[subgroup].values()))
         return missing_indices_dict
 
     def _handle_non_missing_indices(self, missing_indices_dict, subgroup, binary_vecs):
         if len(missing_indices_dict[subgroup]) == 0:
-            f_idx = np.random.randint(0, self.feature_num)
-            missing_indices_dict[subgroup][f'f_{f_idx}'] = self._get_feature_indices(f_idx, binary_vecs)
+            fid = np.random.randint(0, self.feature_num)
+            missing_indices_dict[subgroup][f'f_{fid}'] = self._get_feature_indices(fid, binary_vecs)
         return missing_indices_dict

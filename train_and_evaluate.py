@@ -13,28 +13,24 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_pipeline_obj(args, dir_path):
-    pipeline_obj = None
-    if args.load_model:
-        try:
-            with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
-                missing_indices_dict = pickle.load(f)
-                pipeline_obj = PipelineManager(args, missing_indices_dict)
-        except FileNotFoundError:
-            pass
-    if pipeline_obj is None:
-        pipeline_obj = PipelineManager(args)
+    # pipeline_obj = None
+    # if args.load_model:
+    #     try:
+    #         with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
+    #             missing_indices_dict = pickle.load(f)
+    #             pipeline_obj = PipelineManager(args, missing_indices_dict)
+    #     except FileNotFoundError:
+    #         pass
+    # if pipeline_obj is None:
+    pipeline_obj = PipelineManager(args)
     return pipeline_obj
 
 
 def get_dir_path(args):
-    if args.dir_path is None:
-        if args.is_synthetic:
-            return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
-        else:
-            #todo: Change it if needed
-            return f"RealWorldData/{args.data_name}/dataset.pkl"
+    if args.data_name == 'synthetic':
+        return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
     else:
-        return args.dir_path
+        return f"RealWorldData/{args.data_name}/"
 
 
 class PipelineManager:
@@ -43,17 +39,17 @@ class PipelineManager:
         self.config_idx = int(args.config)
         self.seeds_num = args.seeds_num
         self.epochs = args.epochs
-        self.at_k = verify_at_k(args.at_k)
-        self.dataset_path, self.graph_path, self.dir_path = read_paths(args)
+        self.at_k = args.at_k if isinstance(args.at_k, list) else [args.at_k]
+        self.graph_path, self.dir_path = read_paths(args)
         self.lattice_graph, self.subgroups = self._load_graph_information()
         self.feature_num = self.lattice_graph['g0'].x.shape[1]
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
-        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.max_level)
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level, self.max_level)
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
-        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split(args)
+        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
         self.test_idxs_dict = self._get_test_indices()
 
     def _load_graph_information(self):
@@ -95,9 +91,17 @@ class PipelineManager:
             print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
         return tmp_results_dict
 
-    def _train_validation_split(self, args):
-        sampler = NodeSampler(self.config_idx, self.feature_num, self.non_missing_dict, self.missing_indices_dict,
-                              self.restricted_graph_idxs_mapping, args.sampling_ratio, args.sampling_method)
+    def _train_validation_split(self):
+        sampler = NodeSampler(
+            self.min_level,
+            self.max_level,
+            self.feature_num,
+            self.non_missing_dict,
+            self.missing_indices_dict,
+            self.restricted_graph_idxs_mapping,
+            self.args.sampling_ratio,
+            self.args.sampling_method,
+        )
         train_idxs_dict = sampler.train_indices_dict
         valid_idxs_dict = sampler.val_indices_dict
         return train_idxs_dict, valid_idxs_dict
@@ -161,7 +165,7 @@ class PipelineManager:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
                                                                           criterion, best_val, no_impr_counter, seed)
-        return
+
 
     def model_not_found(self, seed):
         for subgroup in self.subgroups:
@@ -181,7 +185,6 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
     parser.add_argument('--p_dropout', type=float, default=GNN.p_dropout)
     parser.add_argument('--epochs', type=int, default=GNN.epochs)
-    parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     parser.add_argument('--sampling_ratio', type=float, default=Sampling.sampling_ratio)
     parser.add_argument('--sampling_method', type=str, default=Sampling.method)
     parser.add_argument('--valid_ratio', type=str, default=Sampling.validation_ratio)
@@ -192,26 +195,25 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
-    parser.add_argument('--is_synthetic', type=bool, default=True,
-                        help='whether the dataset is synthetic or real-world')
     parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--dir_path', type=str, default=None, help='path to the directory file')
+    parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
+    parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     args = parser.parse_args()
-    seeds_num = args.seeds_num
+
     dir_path = get_dir_path(args)
     pipeline_obj = get_pipeline_obj(args, dir_path)
     subgroups = pipeline_obj.lattice_graph.x_dict.keys()
     results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
-                                for seed in range(1, seeds_num + 1)} for comb_size in args.comb_size_list}
+                                for seed in range(1, args.seeds_num + 1)} for comb_size in args.comb_size_list}
 
-    for seed in range(1, seeds_num + 1):
+    for seed in range(1, args.seeds_num + 1):
         set_seed(seed)
-        if not args.load_model or pipeline_obj.model_not_found(seed):
-            print(f"Seed: {seed}\n=============================")
-            pipeline_obj.train_model(seed)
+        # if not args.load_model or pipeline_obj.model_not_found(seed):
+        print(f"Seed: {seed}\n=============================")
+        pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
     save_results(results_dict, pipeline_obj.dir_path, args.comb_size_list, args)
