@@ -1,6 +1,6 @@
 
 class LatticeGeneration:
-    formula_idx = 2
+    formula_idx = 1
     hyperparams_idx = 1
     min_m = 3
     max_m = 5
@@ -19,12 +19,12 @@ class MissingDataConfig:
 
 class Sampling:
     method = 'randwalk'
-    sampling_ratio = 1.0
+    sampling_ratio = 0.5
     validation_ratio = 0.2
 
 
 class GNN:
-    gnn_model = 'SAGE'  # Can't use GAT for heterogeneous graphs. Use only SAGE for now
+    gnn_model = 'SAGE'  # ['SAGE', 'SAGE_HEAD']
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
