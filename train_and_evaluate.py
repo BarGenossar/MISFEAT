@@ -45,7 +45,8 @@ class PipelineManager:
         self.feature_num = self.lattice_graph['g0'].x.shape[1]
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
-        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level, self.max_level)
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
+                                                                               self.max_level)
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
@@ -93,6 +94,7 @@ class PipelineManager:
 
     def _train_validation_split(self):
         sampler = NodeSampler(
+            self.config_idx,
             self.min_level,
             self.max_level,
             self.feature_num,
@@ -199,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
+    parser.add_argument('--data_name', type=str, default='synthetic', help='options:{synthetic, loan, startup, mobile}')
     parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     args = parser.parse_args()
 
