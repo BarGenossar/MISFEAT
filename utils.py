@@ -199,12 +199,13 @@ def get_comb_size_indices(node_ids, comb_size, feature_num):
     return comb_size_indices
 
 
-def save_results(test_results, dir_path, comb_size_list, args):
+def save_results(test_results, dir_path, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    for comb_size in comb_size_list:
-        results_path = dir_path + (f'results_size={comb_size}_sampling={args.sampling_ratio}'
-                                   f'_missing_ratio={args.missing_prob}_sampling_method={args.sampling_method}.pkl')
+    for comb_size in args.comb_size_list:
+        results_path = dir_path + (f'combSize={comb_size}_samplingRatio={args.sampling_ratio}_'
+                                   f'missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_'
+                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_model={args.model}.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
@@ -248,7 +249,7 @@ def read_paths(args):
         dir_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/"
     else:
         dir_path = f"RealWorldData/{args.data_name}/"
-    graph_path = os.path.join(dir_path, 'dataset_hetero_graph.pt')
+    graph_path = os.path.join(dir_path, f'dataset_hetero_graph_edgeSamplingRatio={args.edge_sampling_ratio}.pt')
     return graph_path, dir_path
 
 

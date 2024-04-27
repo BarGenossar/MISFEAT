@@ -45,5 +45,5 @@ class Evaluation:
     at_k = [3, 5, 10]
     comb_size_list = [3, 4, 5]
     eval_metrics = ['NDCG', 'PREC']
-    formula_idx_list = [0, 1, 2, 3, 4]
-    config_idx_list = [1, 3]
+    formula_idx_list = [1]
+    config_idx_list = [1]

@@ -27,7 +27,8 @@ class FeatureLatticeGraph:
         self.edge_sampling_ratio = args.edge_sampling_ratio
         self.subgroups_num = self.dataset['subgroup'].nunique()
         self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count() - 4))
-        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level, self.max_level)
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
+                                                                               self.max_level)
         self.mappings_dict = self._create_mappings_dict()
         self.graph = self._create_multiple_feature_lattice()
         self.save(dataset_path)
@@ -244,7 +245,7 @@ class FeatureLatticeGraph:
             return data
 
     def save(self, dataset_path) -> None:
-        graph_path = dataset_path.replace('.pkl', f'_hetero_graph.pt')
+        graph_path = dataset_path.replace('.pkl', f'_hetero_graph_edgeSamplingRatio={self.edge_sampling_ratio}.pt')
         torch.save(self.graph, graph_path)
         print(f"The lattice graph was saved at {graph_path}")
 
