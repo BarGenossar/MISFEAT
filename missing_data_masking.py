@@ -5,6 +5,7 @@ from utils import convert_decimal_to_binary
 
 class MissingDataMasking:
     def __init__(self, feature_num, subgroups, config_num, missing_prob, restricted_graph_idxs_mapping, manual):
+        np.random.seed(config_num)
         self.feature_num = feature_num
         self.subgroups = subgroups
         self.restricted_graph_idxs_mapping = restricted_graph_idxs_mapping
