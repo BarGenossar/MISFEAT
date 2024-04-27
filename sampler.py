@@ -51,13 +51,12 @@ class NodeSampler:
         return nids
 
     def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> list:
-        curr_node = node_list[-1]
+        curr_node = random.choice(node_list)
         rand_idx = self.feature_num-1 - np.random.choice(present_bits)
         rand_bit = np.random.choice(['0', '1'], p=[0.5, 0.5])
         new_node = curr_node[: rand_idx] + rand_bit + curr_node[rand_idx + 1:]
         if new_node not in node_list and self.min_level <= new_node.count('1') <= self.max_level:
             node_list.append(new_node)
-        return node_list
 
     def _get_start_node(self, present_bits):
         start_node = [0] * self.feature_num
@@ -78,7 +77,7 @@ class NodeSampler:
             num_samples = int(self.sampling_ratio * (2 ** len(non_missing_fids) - 1))
             node_list = [self._get_start_node(non_missing_fids)]
             while len(node_list) < num_samples:
-                node_list = self._random_walk(node_list, non_missing_fids)
+                self._random_walk(node_list, non_missing_fids)
             orig_sampled_nids = list(map(lambda bstr: int(bstr, 2) - 1, node_list))
             sampled_nids_dict[subgroup] = [self.restricted_graph_idxs_mapping[oid] for oid in orig_sampled_nids]
         return sampled_nids_dict
