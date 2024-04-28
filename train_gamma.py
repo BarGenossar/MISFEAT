@@ -71,7 +71,7 @@ class PipelineManager:
     def test_subgroup(self, subgroup, comb_size, show_results=True):
         test_indices = self.test_idxs_dict[subgroup]
         self.lattice_graph.to(device)
-        model = torch.load(f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt")
+        model = torch.load(f"{self.dir_path}/{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_missing{args.missing_prob}.pt")   
         model.to(device)
         model.eval()
         with torch.no_grad():
@@ -257,5 +257,5 @@ if __name__ == "__main__":
         pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
-    save_results(results_dict, pipeline_obj.dir_path, args)
+    save_results(results_dict, pipeline_obj.dir_path, args, f'gamma={args.gamma}')
 
