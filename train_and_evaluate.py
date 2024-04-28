@@ -151,7 +151,7 @@ class PipelineManager:
                     break
                 loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
                 if epoch == 1 or epoch % 5 == 0:
-                    # print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                    # (f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
                     if not self.args.save_model:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
@@ -183,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--gamma', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
