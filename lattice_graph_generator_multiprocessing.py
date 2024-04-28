@@ -17,21 +17,26 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, args):
+    def __init__(self, dataset_path, args, df=None, create_edge=True):
         self.with_edge_attrs = args.with_edge_attrs
         self.tqdm = args.print_tqdm
-        self.dataset = self._read_dataset(dataset_path)
+        if df is not None:
+            self.dataset = df
+        else:
+            self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
         self.edge_sampling_ratio = args.edge_sampling_ratio
         self.subgroups_num = self.dataset['subgroup'].nunique()
-        self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count() - 4))
+        self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count()))
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.mappings_dict = self._create_mappings_dict()
-        self.graph = self._create_multiple_feature_lattice()
-        self.save(dataset_path)
+        if create_edge:
+            self.graph = self._create_multiple_feature_lattice()
+            self.save(dataset_path)
+        
 
     @staticmethod
     def _read_dataset(dataset_path):
@@ -67,7 +72,8 @@ class FeatureLatticeGraph:
     def _create_comb_size_mappings_dict(self, gid, mappings_dict, comb_size, dataframe, y_series, prev_tmp_dict):
         mappings_dict[gid][comb_size] = defaultdict(dict)
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
-        rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
         for comb in tqdm.tqdm(feature_set_combs) if self.tqdm else feature_set_combs:
@@ -103,7 +109,8 @@ class FeatureLatticeGraph:
         mappings_dict = {gid: {1: defaultdict(dict)}}
         prev_tmp_dict = dict()
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_level))
-        rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
         for comb in feature_set_combs:
@@ -122,6 +129,15 @@ class FeatureLatticeGraph:
         data = self._get_edge_attrs(data)
         end_time = time.time()
         print(f"Feature lattice creation took: {round(end_time - start_time, 4)} seconds\n ========================\n")
+        return data
+    
+    def _precompute_MI(self):
+        print(f"\nComputing MI for lattice...")
+        start_time = time.time()
+        data = HeteroData()
+        data = self._get_node_features_and_labels(data)
+        end_time = time.time()
+        print(f"Computing MI took: {round(end_time - start_time, 4)} seconds\n ========================\n")
         return data
 
     def _get_node_features_and_labels(self, data):
@@ -265,7 +281,7 @@ if __name__ == "__main__":
     parser.add_argument('--with_edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
     parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
-    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
+    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
     if args.data_name == 'synthetic':
