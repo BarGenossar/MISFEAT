@@ -42,6 +42,7 @@ class LatticeGNN(torch.nn.Module):
             x = F.leaky_relu(conv(x, edge_index))
             x = F.dropout(x, p=self.p_dropout, training=self.training)
         output = self.out(x).squeeze()
+        # output = self.out(x, edge_index).squeeze()
         return output
 
 

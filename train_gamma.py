@@ -1,4 +1,5 @@
-
+import torch
+import pickle
 import argparse
 from GNN_models import LatticeGNN
 from config import LatticeGeneration, GNN, Sampling, MissingDataConfig
@@ -13,15 +14,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_pipeline_obj(args, dir_path):
-    # pipeline_obj = None
-    # if args.load_model:
-    #     try:
-    #         with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
-    #             missing_indices_dict = pickle.load(f)
-    #             pipeline_obj = PipelineManager(args, missing_indices_dict)
-    #     except FileNotFoundError:
-    #         pass
-    # if pipeline_obj is None:
     pipeline_obj = PipelineManager(args)
     return pipeline_obj
 
@@ -36,6 +28,7 @@ def get_dir_path(args):
 class PipelineManager:
     def __init__(self, args, missing_indices_dict=None):
         self.args = args
+        self.gamma = torch.autograd.Variable(torch.tensor([200.0]), requires_grad=True).to(device)
         self.config_idx = int(args.config)
         self.seeds_num = args.seeds_num
         self.epochs = args.epochs
@@ -50,8 +43,8 @@ class PipelineManager:
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
         self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
                                             self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
-        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
         self.test_idxs_dict = self._get_test_indices()
+        self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
 
     def _load_graph_information(self):
         lattice_graph = torch.load(self.graph_path)
@@ -70,8 +63,7 @@ class PipelineManager:
             return missing_indices_dict
 
     def _init_model_optim(self):
-        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers,
-                           self.args.p_dropout)
+        model = LatticeGNN(self.args.model, self.feature_num, self.args.hidden_channels, self.args.num_layers, self.args.p_dropout)
         model = to_hetero(model, self.lattice_graph.metadata())
         model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.args.lr, weight_decay=self.args.weight_decay)
@@ -85,7 +77,7 @@ class PipelineManager:
         model.eval()
         with torch.no_grad():
             out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        labels = self.lattice_graph[subgroup].y
+        labels = self.lattice_graph[subgroup].y * self.gamma
         preds = out[subgroup]
         tmp_results_dict = compute_eval_metrics(labels, preds, test_indices, self.at_k, comb_size, self.feature_num)
         if show_results:
@@ -93,6 +85,7 @@ class PipelineManager:
         return tmp_results_dict
 
     def _train_validation_split(self):
+        train_idxs_dict, valid_idxs_dict = dict(), dict()
         sampler = NodeSampler(
             self.config_idx,
             self.min_level,
@@ -104,69 +97,100 @@ class PipelineManager:
             self.args.sampling_ratio,
             self.args.sampling_method,
         )
-        train_idxs_dict = sampler.train_indices_dict
-        valid_idxs_dict = sampler.val_indices_dict
+        for g_id in self.subgroups:
+            if self.args.valid_ratio == 0:
+                train_idxs_dict[g_id] = sampler.selected_samples[g_id]
+                valid_idxs_dict[g_id] = self.test_idxs_dict[g_id]
+            else:
+                train_idxs_dict[g_id], valid_idxs_dict[g_id] = train_test_split(sampler.selected_samples[g_id],
+                                                                                test_size=self.args.valid_ratio)
         return train_idxs_dict, valid_idxs_dict
 
     def _get_test_indices(self):
-        test_idxs_dict = dict()
-        for subgroup in self.subgroups:
-            test_idxs_dict[subgroup] = [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
-                                        self.train_idxs_dict[subgroup] and idx not in self.valid_idxs_dict[subgroup]]
-        return test_idxs_dict
+        return {subgroup: self.missing_indices_dict[subgroup]['all'] for subgroup in self.subgroups}
 
-    def _run_training_epoch(self, train_indices, model, subgroup, optimizer, criterion):
+    def _run_training_epoch(self, model, optimizer, criterion, update_gamma=False):
         model.train()
         optimizer.zero_grad()
         out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        labels = self.lattice_graph[subgroup].y[train_indices]
-        predictions = out[subgroup][train_indices]
-        loss = criterion(predictions, labels)
-        loss.backward()
-        optimizer.step()
-        return loss.item()
+        # num_missing = [1 / (1+len(feats)) for feats in self.missing_features_dict.values() ]
+        grads = {}
+        grad_gamma = 0.
+        epoch_loss = 0
+        for gid, subgroup in enumerate(self.subgroups):
+            train_indices = self.train_idxs_dict[subgroup]
+            mi_true = self.lattice_graph[subgroup].y[train_indices] * self.gamma
+            mi_pred = out[subgroup][train_indices]
 
-    def _get_validation_loss(self, validation_indices, model, subgroup, criterion):
+            ## accumulate gradients across subgroups
+            if update_gamma:
+                loss = torch.sum((mi_true - mi_pred) ** 2)/len(mi_true)
+                grads = torch.autograd.grad(loss, self.gamma, torch.ones_like(loss))
+                grad_gamma += grads[0]
+            else:
+                loss = criterion(mi_pred, mi_true)
+                loss.backward(retain_graph=True)
+
+                for n, p in model.named_parameters():
+                    if p.grad is not None:
+                        try:
+                            grads[n] += p.grad# * num_missing[gid]/sum(num_missing)
+                        except KeyError:
+                            grads[n] = p.grad# * num_missing[gid]/sum(num_missing)
+            epoch_loss += loss.item()
+
+        if update_gamma:
+            self.gamma = self.gamma - self.args.lr * grad_gamma
+        else:
+            for n, p in model.named_parameters():
+                if grads[n] is not None:
+                    p.data -= self.args.lr * grads[n]
+        return epoch_loss / len(self.subgroups)
+
+    def _get_val_pred(self, val_indices, model, subgroup):
         model.eval()
-        model.to(device)
         with torch.no_grad():
             out = model(self.lattice_graph.x_dict, self.lattice_graph.edge_index_dict)
-        labels = self.lattice_graph[subgroup].y[validation_indices]
-        predictions = out[subgroup][validation_indices]
-        loss = criterion(predictions, labels)
-        return loss.item()
+        mi_true = self.lattice_graph[subgroup].y[val_indices] * self.gamma
+        mi_pred = out[subgroup][val_indices]
+        # for a, b in zip(mi_pred, mi_true):
+        #     print(subgroup, round(a.item(), 5), round(b.item(), 5))
+        # print(mi_pred, mi_true)
+        return mi_true.tolist(), mi_pred.tolist()
 
-    def _run_over_validation(self, validation_indices, model, subgroup, criterion, best_val, no_impr_counter, seed):
-        loss_validation = self._get_validation_loss(validation_indices, model, subgroup, criterion)
-        if loss_validation < best_val:
-            best_val = loss_validation
-            no_impr_counter = 0
-            torch.save(model, f"{self.dir_path}{self.args.model}_seed{seed}_{subgroup}.pt")
+    def _run_over_validation(self, model, criterion, best_mse, no_impr_counter, seed):
+        all_mi_true = []
+        all_mi_pred = []
+        for subgroup in self.subgroups:
+            val_indices = self.valid_idxs_dict[subgroup]
+            mi_true, mi_pred = self._get_val_pred(val_indices, model, subgroup)
+            all_mi_true.extend(mi_true)
+            all_mi_pred.extend(mi_pred)
+            mse = criterion(torch.tensor(all_mi_pred), torch.tensor(all_mi_true))
+            if mse < best_mse:
+                best_mse = mse
+                no_impr_counter = 0
+                torch.save(model, f"{self.dir_path}/{self.args.model}_seed{seed}_ratio{self.args.sampling_ratio}_missing{args.missing_prob}.pt")
         else:
             no_impr_counter += 1
-        return best_val, no_impr_counter
+        return mse, best_mse, no_impr_counter
 
     def train_model(self, seed):
-        torch.manual_seed(seed)
         criterion = torch.nn.MSELoss()
         self.lattice_graph.to(device)
-        for subgroup in self.subgroups:
-            print(f"\nTraining on subgroup {subgroup}...")
-            model, optimizer = self._init_model_optim()
-            train_indices, validation_indices = self.train_idxs_dict[subgroup], self.valid_idxs_dict[subgroup]
-            no_impr_counter = 0
-            epochs_stable_val = GNN.epochs_stable_val
-            best_val = float('inf')
-            for epoch in range(1, self.epochs + 1):
-                if no_impr_counter == epochs_stable_val:
-                    break
-                loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
-                if epoch == 1 or epoch % 5 == 0:
-                    print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
-                    if not self.args.save_model:
-                        continue
-                    best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
-                                                                          criterion, best_val, no_impr_counter, seed)
+
+        model, optimizer = self._init_model_optim()
+
+        no_impr_counter = 0
+        best_mse = float('inf')
+        for epoch in range(1, self.args.epochs + 1):
+            if no_impr_counter == GNN.epochs_stable_val:
+                break
+            update_gamma = True if epoch % 5 == 0 else False
+            train_loss = self._run_training_epoch(model, optimizer, criterion, update_gamma)
+            if epoch == 0 or epoch % 5 == 0:
+                mse, best_mse, no_impr_counter = self._run_over_validation(model, criterion, best_mse, no_impr_counter, seed)
+                print(f"Epoch: {epoch}, train loss = {train_loss:.4f}, val loss: {mse:.4f}, best val loss: {best_mse:.4f}")
 
 
     def model_not_found(self, seed):

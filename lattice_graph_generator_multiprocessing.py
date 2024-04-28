@@ -17,10 +17,13 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, args):
+    def __init__(self, dataset_path, args, df=None, create_edge=True):
         self.with_edge_attrs = args.with_edge_attrs
         self.tqdm = args.print_tqdm
-        self.dataset = self._read_dataset(dataset_path)
+        if df is not None:
+            self.dataset = df
+        else:
+            self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
@@ -30,8 +33,9 @@ class FeatureLatticeGraph:
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.mappings_dict = self._create_mappings_dict()
-        self.graph = self._create_multiple_feature_lattice()
-        self.save(dataset_path)
+        if create_edge:
+            self.graph = self._create_multiple_feature_lattice()
+            self.save(dataset_path)
 
     @staticmethod
     def _read_dataset(dataset_path):
@@ -122,6 +126,15 @@ class FeatureLatticeGraph:
         data = self._get_edge_attrs(data)
         end_time = time.time()
         print(f"Feature lattice creation took: {round(end_time - start_time, 4)} seconds\n ========================\n")
+        return data
+    
+    def _precompute_MI(self):
+        print(f"\nComputing MI for lattice...")
+        start_time = time.time()
+        data = HeteroData()
+        data = self._get_node_features_and_labels(data)
+        end_time = time.time()
+        print(f"Computing MI took: {round(end_time - start_time, 4)} seconds\n ========================\n")
         return data
 
     def _get_node_features_and_labels(self, data):

@@ -19,8 +19,8 @@ class MissingDataConfig:
 
 class Sampling:
     method = 'randwalk'
-    sampling_ratio = 0.5
-    validation_ratio = 0.2
+    sampling_ratio = 0.75
+    validation_ratio = 0.0
 
 
 class GNN:
@@ -28,8 +28,8 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 300
-    epochs_stable_val = 5
+    epochs = 500
+    epochs_stable_val = 50
 
 
 class MLP:

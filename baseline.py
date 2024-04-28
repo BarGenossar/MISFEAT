@@ -1,19 +1,40 @@
-import json
-import argparse
-import typing as t
-import numpy as np
-import pandas as pd
-from itertools import combinations
-# from fancyimpute import IterativeImputer
-from sklearn.metrics import normalized_mutual_info_score, mutual_info_score
-from sklearn.impute import SimpleImputer, KNNImputer
-#from utils import compute_eval_metrics, compute_ndcg, compute_precision, compute_RMSE
-import torch
-from Custom_KNN_Imputer import CustomKNNImputer
-import math
-from sklearn.metrics import ndcg_score
-from utils import set_seed, Kendall_tau
 
+import argparse
+from GNN_models import LatticeGNN
+from config import LatticeGeneration, GNN, Sampling, MissingDataConfig
+from lattice_graph_generator_multiprocessing import FeatureLatticeGraph
+from missing_data_masking import MissingDataMasking
+from sampler import NodeSampler
+from utils import *
+from torch_geometric.nn import to_hetero
+from sklearn.model_selection import train_test_split
+import warnings
+from Custom_KNN_Imputer import CustomKNNImputer
+from sklearn.impute import SimpleImputer, KNNImputer
+warnings.filterwarnings('ignore')
+import pandas as pd
+from sklearn.metrics import mutual_info_score
+import multiprocessing as mp
+from functools import partial
+import numpy as np
+from itertools import combinations
+from collections import defaultdict
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def get_pipeline_obj(args, dir_path):
+    # with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
+    #     missing_indices_dict = pickle.load(f)
+    pipeline_obj = PipelineManager(args)
+    return pipeline_obj
+
+
+def get_dir_path(args):
+    if args.data_name == 'synthetic':
+        return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
+    else:
+        return f"RealWorldData/{args.data_name}/"
+    
 
 class DataImputer:
     def __init__(self, missing_dict, imputation_method='mode'):
@@ -24,6 +45,9 @@ class DataImputer:
         for subgroup, features in self.missing_dict.items():
             g_id = int(subgroup.split('g')[-1])
             data.loc[data['subgroup'] == g_id, features] = np.nan
+            # print(features)
+            # print(data.loc[data['subgroup'] == g_id, features])
+            # exit()
         return data
 
     def _impute_data(self, data):
@@ -32,11 +56,7 @@ class DataImputer:
                 imputer = SimpleImputer(strategy='most_frequent')
                 data[column] = imputer.fit_transform(data[[column]])
         elif self.imputation_method == 'KNN':
-            imputer = CustomKNNImputer(n_neighbors=15)
-            # print(data.head())
-            data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
-        elif self.imputation_method == 'MICE':
-            imputer = IterativeImputer()
+            imputer = CustomKNNImputer(n_neighbors=3)
             data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
         elif self.imputation_method == 'constant':
             print("imputation is constant")
@@ -44,7 +64,6 @@ class DataImputer:
             data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
         else:
             raise ValueError("Unsupported imputation method")
-        
         return data
 
     def process(self, data):
@@ -53,150 +72,136 @@ class DataImputer:
         return data
 
 
-def get_mi_score(df_subgroup: pd.DataFrame, combinations: t.List[t.Tuple[str]]):
-    """
-    Example:
-        combinations = [('f_0', 'f_1'), ('f_5', 'f_6'), ('f_2', 'f_3')]
-        output = [MI scores of the feature tuples]
-    """
-    df_subgroup = df_subgroup.astype(str)
-    scores = []
-    for comb in combinations:
-        comb_series = df_subgroup[list(comb)].apply(lambda x: ''.join(x), axis=1)
-        # score = normalized_mutual_info_score(comb_series, df_subgroup['y']) + 0.5
-        score = mutual_info_score(comb_series, df_subgroup['y'])
-        scores.append(round(score, 5))
-    return scores
+
+class PipelineManager:
+    def __init__(self, args, missing_indices_dict=None):
+        self.args = args
+        self.config_idx = int(args.config)
+        self.seeds_num = args.seeds_num
+        self.at_k = args.at_k if isinstance(args.at_k, list) else [args.at_k]
+        self.graph_path, self.dir_path = read_paths(args)
+        self.lattice_graph, self.subgroups = self._load_graph_information()
+        self.feature_num = self.lattice_graph['g0'].x.shape[1]
+        self.min_level = get_min_level(args.min_m, args.num_layers)
+        self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
+        self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
+                                                                               self.max_level)
+        self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
+        # print(self.missing_indices_dict['g0'].keys())
+        # exit()
+        self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
+                                            self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
+        self.test_idxs_dict = self._get_test_indices()
+        self.preds = {subgroup: torch.zeros(self.lattice_graph[subgroup].num_nodes) for subgroup in self.subgroups}
+
+        df = pd.read_pickle(f"{self.dir_path}dataset.pkl")
+        df = self._impute(df)
+        self.impute_mappings_dict = self._get_mi_after_impute(df)
+        for gid in self.impute_mappings_dict:
+            for comb_size in self.impute_mappings_dict[gid]:
+                for comb in self.impute_mappings_dict[gid][comb_size]:
+                    comb_idx = self.impute_mappings_dict[gid][comb_size][comb]['restricted_node_id']
+                    comb_score = self.impute_mappings_dict[gid][comb_size][comb]['score']
+                    self.preds[f"g{gid}"][comb_idx] = comb_score
+
+    def _impute(self, df):
+        missing_dict = {subgroup: list(self.missing_indices_dict[subgroup].keys())[:-1] for subgroup in self.missing_indices_dict}
+        imputer = DataImputer(missing_dict, self.args.imputation_method)
+        print("Imputing missing data...")
+        df = imputer.process(df)
+        # df = df.astype(str)
+        return df
+
+    def _get_mi_after_impute(self, df):
+        print("Computing MI scores for the imputed dataframe...")
+        lattice_generator = FeatureLatticeGraph(f"{self.dir_path}dataset.pkl", self.args, df, create_edge=False)
+        return lattice_generator.mappings_dict
 
 
-# def get_feature_importance(df_subgroup: pd.DataFrame, combinations: t.List[t.Tuple[str]]):
-#     """
-#     Example:
-#         combinations = [('f_0', 'f_1'), ('f_5', 'f_6'), ('f_2', 'f_3')]
-#         output = [feature importance scores of the combinations]
-#     """
-#     df_subgroup = df_subgroup.astype(str)
-#     # TODO: create new dataframe with new columns as combinations
-#     # run random forest and get feature importance
-#     new_df = [df_subgroup['y']]
-#     for comb in combinations:
-#         new_series = df_subgroup[list(comb)].apply(lambda x: ''.join(x), axis=1)
-#         new_df.append(new_series)
-#     new_df = pd.concat(new_df, axis=1)
+    def _load_graph_information(self):
+        lattice_graph = torch.load(self.graph_path)
+        subgroups = lattice_graph.node_types
+        return lattice_graph, subgroups
 
-    #     score = mutual_info_score(comb_series, df_subgroup['y'])  # TODO: replace this line with Random Forest to compute feature importance
-    #     scores.append(round(score, 5))
-    # return 
+    def _get_missing_data_dict(self, missing_indices_dict):
+        if missing_indices_dict is not None:
+            return missing_indices_dict
+        else:
+            missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
+                                                      self.args.missing_prob, self.restricted_graph_idxs_mapping,
+                                                      self.args.manual_md).missing_indices_dict
+            with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
+                pickle.dump(missing_indices_dict, f)
+            return missing_indices_dict
 
+    def test_subgroup(self, subgroup, comb_size, show_results=True):
+        gid = int(subgroup.split('g')[-1])
+        test_indices = self.test_idxs_dict[subgroup]
+        labels = self.lattice_graph[subgroup].y
+        # test_tuples = [convert_decimal_to_comb(nid + 1, self.feature_num) for nid in test_indices]
+        # print(comb_size, test_tuples)
+        # exit()
+        preds = self.impute_mappings_dict[gid]
+        tmp_results_dict = compute_eval_metrics_baseline(labels, self.preds[subgroup], test_indices, self.at_k, comb_size, self.feature_num)
+        if show_results:
+            print_results(tmp_results_dict, self.at_k, comb_size, subgroup)
+        return tmp_results_dict
 
-def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
-    precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
-    return round(precision / k, 4)
-
-
-def compute_RMSE(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices):
-    # Implement normalized MAE, such that the difference is divided by the maximum possible difference
-    rmse = sum([(ground_truth[sorted_gt_indices[i]] -
-                   predictions[sorted_gt_indices[i]])**2 for i in range(k)])
-    return round(math.sqrt(rmse.item() / k), 4)
-
-
-def compute_NDCG(mi_true, mi_pred, k):
-    rank_true = np.argsort(mi_true)[::-1]
-    rank_pred = np.argsort(mi_pred)[::-1]
-    relevance = [0] * len(mi_true)
-    for i in range(k): relevance[rank_true[i]] = k - i
-    # for i in range(k): relevance[rank_true[i]] = 1
-    DCG = 0.
-    IDCG = 0.
-    for i in range(k):
-        IDCG += (k - i) / math.log(i + 2, 2)
-        # IDCG += 1 / math.log(i + 2, 2)
-        DCG += relevance[rank_pred[i]] / math.log(i + 2, 2)
-    return round(DCG / IDCG, 4)
-
-    # return ndcg_score(np.array([relevance]), np.array([relevance_pred]), k=at_k)
+    # def _get_test_indices(self):
+    #     test_idxs_dict = dict()
+    #     for subgroup in self.subgroups:
+    #         test_idxs_dict[subgroup] = [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
+    #                                     self.train_idxs_dict[subgroup] and idx not in self.valid_idxs_dict[subgroup]]
+    #     return test_idxs_dict
+    
+    def _get_test_indices(self):
+        return {subgroup: self.missing_indices_dict[subgroup]['all'] for subgroup in self.subgroups}
 
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Baseline experiments')
-    parser.add_argument('--data_name', type=str, default='loan', help='name of the dataset')
-    parser.add_argument('--imputation_method', type=str, default='KNN', choices=['mode', 'KNN', 'MICE','constant'],
-                        help='Imputation method to use: mode, KNN, or MICE. Default is mode.')
-    parser.add_argument('--comb_size', type=int, default=3, help='combination size to be tested')
-    parser.add_argument('--seed', type=int, default=1, help='combination size to be tested')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seeds_num', type=int, default=3)
+    parser.add_argument('--formula', type=str, default=str(LatticeGeneration.formula_idx))
+    parser.add_argument('--config', type=str, default=str(LatticeGeneration.hyperparams_idx))
+    parser.add_argument('--model', type=str, default=GNN.gnn_model)
+    parser.add_argument('--hidden_channels', type=int, default=GNN.hidden_channels)
+    parser.add_argument('--num_layers', type=int, default=GNN.num_layers)
+    parser.add_argument('--p_dropout', type=float, default=GNN.p_dropout)
+    parser.add_argument('--epochs', type=int, default=GNN.epochs)
+    parser.add_argument('--sampling_ratio', type=float, default=Sampling.sampling_ratio)
+    parser.add_argument('--sampling_method', type=str, default=Sampling.method)
+    parser.add_argument('--valid_ratio', type=str, default=Sampling.validation_ratio)
+    default_at_k = ','.join([str(i) for i in Evaluation.at_k])
+    parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
+    parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
+    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--weight_decay', type=float, default=5e-4)
+    parser.add_argument('--display', type=bool, default=False)
+    parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
+    parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
+    parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
+    parser.add_argument('--load_model', type=bool, default=False)
+    parser.add_argument('--save_model', type=bool, default=True)
+    parser.add_argument('--data_name', type=str, default='synthetic', help='options:{synthetic, loan, startup, mobile}')
+    parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
+    parser.add_argument('--edge_sampling_ratio', type=float, default=LatticeGeneration.edge_sampling_ratio)
+    parser.add_argument('--imputation_method', type=str, default='KNN', help="options: {KNN, mode}")
+    parser.add_argument('--with_edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
+                        help='add attributes to the edges')
+    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
-    set_seed(args.seed)
+    dir_path = get_dir_path(args)
+    pipeline_obj = get_pipeline_obj(args, dir_path)
+    subgroups = pipeline_obj.lattice_graph.x_dict.keys()
+    results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
+                                for seed in range(1, args.seeds_num + 1)} for comb_size in args.comb_size_list}
+    missing_dict = {}
+    for seed in range(1, args.seeds_num + 1):
+        set_seed(seed)
+        print(f"Seed: {seed}\n=============================")
+        for comb_size in args.comb_size_list:
+            results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
+    save_results(results_dict, pipeline_obj.dir_path, args)
 
-    df_true = pd.read_pickle(f'./RealWorldData/{args.data_name}/dataset.pkl')
-
-    ## load missing dict
-    with open(f'./RealWorldData/{args.data_name}/missing_seed{args.seed}.json', 'r') as file:
-        missing_dict = json.load(file)
-
-    ## imputation
-    df_miss = df_true.copy(deep=True)
-    imputer = DataImputer(missing_dict, args.imputation_method)
-    df_miss = imputer.process(df_miss)
-    df_miss = df_miss.astype(int)
-
-    ## dataframe information
-    base_features = [feat for feat in df_true.columns if 'f_' in feat]
-    feature_num = len(base_features)
-    subgroups = [f'g{g_id}' for g_id in range(len(set(df_true.subgroup)))]
-    
-    ## get test results
-    mi = {subgroup: {} for subgroup in subgroups}
-    results = {metric: {} for metric in ['NDCG', 'PREC', 'RMSE']}
-    for subgroup in subgroups:
-        g_id = int(subgroup.split('g')[-1])
-        subgroup_combs = []
-        for feat in missing_dict[subgroup]:
-            base_features.remove(feat)
-            combs = combinations(base_features, args.comb_size - 1)
-            combs = [tuple(sorted([feat] + list(comb))) for comb in combs]
-            subgroup_combs.extend(combs)
-            base_features.append(feat)
-
-
-        subgroup_combs = sorted(list(set(subgroup_combs)))   # remove duplicates
-        mi[subgroup]['true'] = get_mi_score(df_true[df_true.subgroup == g_id], subgroup_combs)   # array of MI scores
-        mi[subgroup]['miss'] = get_mi_score(df_miss[df_miss.subgroup == g_id], subgroup_combs)   # array of MI scores
-
-        true_rank = np.argsort(mi[subgroup]['true'])[::-1]
-        pred_rank = np.argsort(mi[subgroup]['miss'])[::-1]
-
-        if len(mi[subgroup]['true']) == 0:
-            continue
-
-        for at_k in [5, 10, 20]:
-            results['NDCG'][at_k] = compute_NDCG(mi[subgroup]['true'], mi[subgroup]['miss'], at_k)
-            print(f"subgroup: {subgroup}, comb_size: {args.comb_size}, nDCG @ {at_k}: {results['NDCG'][at_k]}")
-            results['PREC'][at_k] = compute_precision(mi[subgroup]['true'], mi[subgroup]['miss'], at_k, true_rank, pred_rank)
-            print(f"subgroup: {subgroup}, comb_size: {args.comb_size}, precision @ {at_k}: {results['PREC'][at_k]}")
-            print()
-
-        # print(f"subgroup: {subgroup}, at_k: {at_k}, combSize: {comb_size}, precision: {results['PREC'][at_k]}")
-
-
-        # print(subgroup_results)
-
-
-
-"""
-For Mouinul's experiments:
-comb size = {3, 4, 5}
-at_k = {3, 5, 10, 20}
-
-Complete the evaluation framework for baseline
-
-"""
-
-
-
-# subgroup: g0, combSize: 2, nDCG @ 5: 0.6196
-# subgroup: g2, combSize: 2, nDCG @ 5: 0.5729
-# subgroup: g5, combSize: 2, nDCG @ 5: 0.9204
-# subgroup: g6, combSize: 2, nDCG @ 5: 0.6287
