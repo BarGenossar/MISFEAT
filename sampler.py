@@ -95,7 +95,6 @@ class NodeSampler:
                     node_list = []
                     curr_node = start_node
                     stuck_rounds = 0
-                    break
                     
             orig_sampled_nids = list(map(lambda bstr: int(bstr, 2) - 1, node_list))
             sampled_nids_dict[subgroup] = [self.restricted_graph_idxs_mapping[oid] for oid in orig_sampled_nids]
