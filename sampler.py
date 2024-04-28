@@ -81,8 +81,22 @@ class NodeSampler:
             start_node = self._get_start_node(non_missing_fids)
             node_list = [start_node]
             curr_node = start_node
+            stuck_rounds = 0
             while len(node_list) < num_samples:
+                len_before_walk = len(node_list)
                 curr_node = self._random_walk(curr_node, node_list, non_missing_fids)
+                len_after_walk = len(node_list)
+                if len_after_walk > len_before_walk:
+                    stuck_rounds = 0
+                else:
+                    stuck_rounds += 1
+                    
+                if stuck_rounds == 50:    # explore from the beginning
+                    node_list = []
+                    curr_node = start_node
+                    stuck_rounds = 0
+                    break
+                    
             orig_sampled_nids = list(map(lambda bstr: int(bstr, 2) - 1, node_list))
             sampled_nids_dict[subgroup] = [self.restricted_graph_idxs_mapping[oid] for oid in orig_sampled_nids]
         return sampled_nids_dict
