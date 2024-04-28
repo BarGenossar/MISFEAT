@@ -13,14 +13,18 @@ import warnings
 import time
 import multiprocessing
 from functools import partial
+
 warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, args):
+    def __init__(self, dataset_path, args, df=None, create_edge=True):
         self.with_edge_attrs = args.with_edge_attrs
         self.tqdm = args.print_tqdm
-        self.dataset = self._read_dataset(dataset_path)
+        if df is not None:
+            self.dataset = df
+        else:
+            self.dataset = self._read_dataset(dataset_path)
         self.feature_num = self.dataset.shape[1] - 2
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
@@ -30,8 +34,9 @@ class FeatureLatticeGraph:
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.mappings_dict = self._create_mappings_dict()
-        self.graph = self._create_multiple_feature_lattice()
-        self.save(dataset_path)
+        if create_edge:
+            self.graph = self._create_multiple_feature_lattice()
+            self.save(dataset_path)
 
     @staticmethod
     def _read_dataset(dataset_path):
@@ -124,12 +129,21 @@ class FeatureLatticeGraph:
         print(f"Feature lattice creation took: {round(end_time - start_time, 4)} seconds\n ========================\n")
         return data
 
+    def _precompute_MI(self):
+        print(f"\nComputing MI for lattice...")
+        start_time = time.time()
+        data = HeteroData()
+        data = self._get_node_features_and_labels(data)
+        end_time = time.time()
+        print(f"Computing MI took: {round(end_time - start_time, 4)} seconds\n ========================\n")
+        return data
+
     def _get_node_features_and_labels(self, data):
         print(f"Getting the node features and labels...\n ------------------\n")
         lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_level, self.max_level)
         with multiprocessing.Pool(processes=self.cores_to_use) as pool:
-           gid_nodes_dict_list = list(pool.imap(partial(self._get_gid_nodes, lattice_nodes_num=lattice_nodes_num),
-                                                range(self.subgroups_num)))
+            gid_nodes_dict_list = list(pool.imap(partial(self._get_gid_nodes, lattice_nodes_num=lattice_nodes_num),
+                                                 range(self.subgroups_num)))
         return self._convert_gid_nodes_to_data(gid_nodes_dict_list, data)
 
     def _get_gid_nodes(self, gid, lattice_nodes_num):
@@ -180,7 +194,6 @@ class FeatureLatticeGraph:
                         next_node_id = next_comb_info['restricted_node_id']
                         edge_index.extend([[node_id, next_node_id], [next_node_id, node_id]])
         return edge_index
-
 
     @staticmethod
     def _convert_gid_inter_edges_to_data(gid_inter_edges_dict_list, data):
@@ -264,8 +277,9 @@ if __name__ == "__main__":
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
     parser.add_argument('--with_edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
-    parser.add_argument('--data_name', type=str, default='synthetic', help='name of dataset, options: {synthetic, loan, startup, mobile}')
-    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
+    parser.add_argument('--data_name', type=str, default='synthetic',
+                        help='name of dataset, options: {synthetic, loan, startup, mobile}')
+    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
     if args.data_name == 'synthetic':

@@ -55,6 +55,13 @@ def convert_comb_to_binary(comb, feature_num):
         binary = binary[:idx] + '1' + binary[idx + 1:]
     return binary[::-1]
 
+def convert_decimal_to_comb(nid, feature_num):
+    bin = convert_decimal_to_binary(nid, feature_num)[::-1]
+    comb = []
+    for idx, bit in enumerate(bin):
+        if bit == '1': comb.append(f"f_{idx}")
+    return tuple(comb)
+
 
 def get_min_level(min_m, num_layers):
     return max(1, min_m-num_layers)
@@ -103,10 +110,22 @@ def compute_eval_metrics(ground_truth, preds, test_indices, at_k, comb_size, fea
     return g_results
 
 
-# def verify_at_k(at_k):
-#     if type(at_k) is not list:
-#         at_k = [at_k]
-#     return at_k
+def compute_eval_metrics_baseline(ground_truth, preds, test_indices, at_k, comb_size, feature_num):
+    eval_metrics, eval_func = get_eval_metric_func()
+    comb_size_indices = get_comb_size_indices(test_indices, comb_size, feature_num)
+    sorted_gt_indices = get_sorted_indices(ground_truth, comb_size_indices)
+    sorted_pred_indices = get_sorted_indices(preds, comb_size_indices)
+    g_results = {metric: dict() for metric in eval_metrics}
+    for metric in eval_metrics:
+        for k in at_k:
+            g_results = eval_func[metric](ground_truth, preds, k, sorted_gt_indices, sorted_pred_indices, g_results)
+    return g_results
+
+
+def verify_at_k(at_k):
+    if type(at_k) is not list:
+        at_k = [at_k]
+    return at_k
 
 
 def get_eval_metric_func():
@@ -124,31 +143,6 @@ def get_sorted_indices(score_tensor, comb_size_indices):
     return [idx.item() for idx in sorted_indices if idx.item() in comb_size_indices]
 
 
-#### Bar's version
-# def compute_dcg(ground_truth, sorted_indices, at_k):
-#     DCG = 0
-#     for i in range(1, min(at_k + 1, len(sorted_indices))):
-#         DCG += ground_truth[sorted_indices[i-1]].item() / math.log2(i+1)
-#         # DCG += (math.pow(2, ground_truth[sorted_indices[i-1]].item()) - 1) / math.log2(i+1)
-#     return DCG
-
-
-# def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
-#     IDCG = compute_dcg(ground_truth, sorted_gt_indices, k)
-#     DCG = compute_dcg(ground_truth, sorted_pred_indices, k)
-#     results['NDCG'][k] = round(DCG / IDCG, 4)
-#     return results
-
-
-#### sklearn version
-# def compute_ndcg(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
-#     relevance = [0] * len(sorted_gt_indices)
-#     for i in range(k): relevance[i] = 1
-#     relevance_pred = [1 if idx in sorted_gt_indices[:k] else 0 for idx in sorted_pred_indices]
-#     results['NDCG'][k] = ndcg_score(np.asarray([relevance]), np.asarray([relevance_pred]))
-
-
-### Bar's after Thinh's version
 def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
     cands_num = len(sorted_list_idx_gt)
     relevance = [0 for _ in range(len(ground_truth))]
@@ -157,23 +151,19 @@ def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_i
     DCG, IDCG = 0, 0
     for i in range(k):
         IDCG += relevance[sorted_list_idx_gt[i]] / math.log(i + 2, 2)
-        DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
+        try:
+            DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
+        except IndexError:
+            print(f"i={i}, k={k}, len(sorted_list_idx_pred)={len(sorted_list_idx_pred)}\n"
+                  f"sorted_list_idx_pred={sorted_list_idx_pred}")
     results['NDCG'][k] = round(DCG / IDCG, 4)
     return results
 
-### Thinh's version
-def compute_ndcg_thin(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
-    relevance = [0] * len(ground_truth)
-    for i in range(k): relevance[sorted_list_idx_true[i]] = k - i
-    # for i in range(k): relevance[sorted_list_idx_true[i]] = 1
-    DCG = 0.
-    IDCG = 0.
-    for i in range(k):
-        IDCG += (k - i) / math.log(i + 2, 2)
-        # IDCG += 1 / math.log(i + 2, 2)
-        DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
-    results['NDCG'][k] = round(DCG / IDCG, 4)
-    return results
+def get_dir_path(args):
+    if args.data_name == 'synthetic':
+        return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
+    else:
+        return f"RealWorldData/{args.data_name}/"
 
 
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):

@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 class NodeSampler:
     def __init__(self, config_idx, min_level, max_level, feature_num, non_missing_dict, missing_indices_dict,
                  restricted_graph_idxs_mapping, sampling_ratio, sampling_method):
-        np.random.seed(config_idx)
+        # np.random.seed(config_idx)
         self.min_level = min_level
         self.max_level = max_level
         self.subgroups = non_missing_dict.keys()
@@ -50,13 +50,15 @@ class NodeSampler:
             nids[gid] = list(np.random.choice(self.non_missing_dict[gid], num_samples, replace=False))
         return nids
 
-    def _random_walk(self, node_list: t.List[str], present_bits: t.List[int]) -> list:
-        curr_node = random.choice(node_list)
-        rand_idx = self.feature_num-1 - np.random.choice(present_bits)
+    def _random_walk(self, curr_node: str, node_list: t.List[str], present_bits: t.List[int]) -> str:
+        rand_idx = self.feature_num - 1 - np.random.choice(present_bits)
         rand_bit = np.random.choice(['0', '1'], p=[0.5, 0.5])
         new_node = curr_node[: rand_idx] + rand_bit + curr_node[rand_idx + 1:]
-        if new_node not in node_list and self.min_level <= new_node.count('1') <= self.max_level:
-            node_list.append(new_node)
+        if new_node not in node_list:
+            curr_node = new_node
+            if self.min_level <= new_node.count('1') <= self.max_level:
+                node_list.append(new_node)
+        return curr_node
 
     def _get_start_node(self, present_bits):
         start_node = [0] * self.feature_num
@@ -75,12 +77,32 @@ class NodeSampler:
                             'f_' in feat]
             non_missing_fids = sorted(list(set(range(self.feature_num)) - set(missing_fids)))
             num_samples = int(self.sampling_ratio * (2 ** len(non_missing_fids) - 1))
-            node_list = [self._get_start_node(non_missing_fids)]
+            start_node = self._get_start_node(non_missing_fids)
+            node_list = [start_node]
+            curr_node = start_node
+            stuck_rounds = 0
             while len(node_list) < num_samples:
-                self._random_walk(node_list, non_missing_fids)
+                print(num_samples, len(node_list))
+                len_before_walk = len(node_list)
+                curr_node = self._random_walk(curr_node, node_list, non_missing_fids)
+                len_after_walk = len(node_list)
+                if len_after_walk > len_before_walk:
+                    stuck_rounds = 0
+                else:
+                    stuck_rounds += 1
+                if stuck_rounds == 50:  # explore from the beginning
+                    curr_node = self._restart_walk(non_missing_fids, node_list)
+                    stuck_rounds = 0
             orig_sampled_nids = list(map(lambda bstr: int(bstr, 2) - 1, node_list))
             sampled_nids_dict[subgroup] = [self.restricted_graph_idxs_mapping[oid] for oid in orig_sampled_nids]
         return sampled_nids_dict
-    
 
-        
+    def _restart_walk(self, present_bits, node_list):
+        # Restart the walk from the beginning by picking random start node as long it is not in the node_list
+        start_node = self._get_start_node(present_bits)
+        while start_node in node_list:
+            start_node = self._get_start_node(present_bits)
+        return start_node
+
+
+

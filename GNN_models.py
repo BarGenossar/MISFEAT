@@ -5,22 +5,22 @@ from torch.nn import Linear
 
 
 class LatticeGNN(torch.nn.Module):
-    def __init__(self, gnn_model, input_channels, hidden_channels, num_layers, p_dropout):
+    def __init__(self, model_version, input_channels, hidden_channels, num_layers, p_dropout):
         super(LatticeGNN, self).__init__()
-        self.model = self._set_model(gnn_model)
+        self.model_version = model_version
+        self.model = self._set_model()
         self.num_layers = num_layers
         self.p_dropout = p_dropout
         self._set_layers(input_channels, hidden_channels)
-        self.out = self._set_prediction_head(gnn_model, hidden_channels)
+        self.out = self._set_prediction_head(hidden_channels)
 
-    @staticmethod
-    def _set_model(gnn_model):
-        if gnn_model == 'SAGE':
+    def _set_model(self):
+        if self.model_version == 'SAGE':
             return SAGEConv
-        elif gnn_model == 'SAGE_HEAD':
+        elif self.model_version == 'SAGE_HEAD':
             return SAGEConv
         else:
-            raise ValueError(f"Invalid GNN model: {gnn_model}")
+            raise ValueError(f"Invalid GNN model: {self.model_version}")
 
     def _set_layers(self, input_channels, hidden_channels):
         for layer_idx in range(1, self.num_layers + 1):
@@ -30,8 +30,8 @@ class LatticeGNN(torch.nn.Module):
                 setattr(self, f'conv{layer_idx}', self.model(hidden_channels, hidden_channels))
         return
 
-    def _set_prediction_head(self, gnn_model, hidden_channels):
-        if gnn_model == 'SAGE_HEAD':
+    def _set_prediction_head(self, hidden_channels):
+        if self.model_version == 'SAGE_HEAD':
             return self.model(hidden_channels, 1)
         else:
             return Linear(hidden_channels, 1)

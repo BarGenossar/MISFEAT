@@ -135,8 +135,9 @@ def save_results_MLPModel(test_results, dir_path, comb_size_list, args):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     for comb_size in comb_size_list:
-        results_path = dir_path + (f'results_size={comb_size}|sampling={args.sampling_ratio}'
-                                   f'|missing_ratio={args.missing_prob}_MLPModel.pkl')
+        results_path = dir_path + (f'combSize={comb_size}_samplingRatio={args.sampling_ratio}_'
+                                   f'missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_'
+                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_model=MLP.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
@@ -173,14 +174,16 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
+    parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
+    parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
     parser.add_argument('--load_model', type=bool, default=True, help='Used for loading the pipeline manager object')
     parser.add_argument('--load_mlp_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--is_synthetic', type=bool, default=True,
-                        help='whether the dataset is synthetic or real-world')
+    parser.add_argument('--data_name', type=str, default='synthetic', help='options:{synthetic, loan, startup, mobile}')
     parser.add_argument('--dir_path', type=str, default=None)
-    parser.add_argument('--res_path', type=str, default='MLP_baseline_results/')
+    parser.add_argument('--edge_sampling_ratio', type=float, default=LatticeGeneration.edge_sampling_ratio)
+
     args = parser.parse_args()
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)
