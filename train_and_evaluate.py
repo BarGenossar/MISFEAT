@@ -12,32 +12,16 @@ warnings.filterwarnings('ignore')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def get_pipeline_obj(args, dir_path):
-    # pipeline_obj = None
-    # if args.load_model:
-    #     try:
-    #         with open(f"{dir_path}missing_data_indices.pkl", 'rb') as f:
-    #             missing_indices_dict = pickle.load(f)
-    #             pipeline_obj = PipelineManager(args, missing_indices_dict)
-    #     except FileNotFoundError:
-    #         pass
-    # if pipeline_obj is None:
-    pipeline_obj = PipelineManager(args)
+def get_pipeline_obj(args, seed):
+    pipeline_obj = PipelineManager(args, seed)
     return pipeline_obj
 
 
-def get_dir_path(args):
-    if args.data_name == 'synthetic':
-        return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
-    else:
-        return f"RealWorldData/{args.data_name}/"
-
-
 class PipelineManager:
-    def __init__(self, args, missing_indices_dict=None):
+    def __init__(self, args, seed, missing_indices_dict=None):
         self.args = args
+        self.seed = seed
         self.config_idx = int(args.config)
-        self.seeds_num = args.seeds_num
         self.epochs = args.epochs
         self.at_k = args.at_k if isinstance(args.at_k, list) else [args.at_k]
         self.graph_path, self.dir_path = read_paths(args)
@@ -48,8 +32,7 @@ class PipelineManager:
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
-        self.non_missing_dict = {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
-                                            self.missing_indices_dict[subgroup]['all']] for subgroup in self.subgroups}
+        self.non_missing_dict = self._get_non_missing_dict()
         self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
         self.test_idxs_dict = self._get_test_indices()
 
@@ -58,14 +41,20 @@ class PipelineManager:
         subgroups = lattice_graph.node_types
         return lattice_graph, subgroups
 
+    def _get_non_missing_dict(self):
+        non_missing_dict_sets = {subgroup: set(self.missing_indices_dict[subgroup]['all'])
+                                 for subgroup in self.subgroups}
+        return {subgroup: [idx for idx in range(self.lattice_graph[subgroup].num_nodes) if idx not in
+                           non_missing_dict_sets[subgroup]] for subgroup in self.subgroups}
+
     def _get_missing_data_dict(self, missing_indices_dict):
         if missing_indices_dict is not None:
             return missing_indices_dict
         else:
-            missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.config_idx,
+            missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.seed,
                                                       self.args.missing_prob, self.restricted_graph_idxs_mapping,
                                                       self.args.manual_md).missing_indices_dict
-            with open(f"{self.dir_path}missing_data_indices.pkl", 'wb') as f:
+            with open(f"{self.dir_path}missing_data_indices_seed{self.seed}.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
 
@@ -162,7 +151,7 @@ class PipelineManager:
                     break
                 loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
                 if epoch == 1 or epoch % 5 == 0:
-                    print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                    # (f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
                     if not self.args.save_model:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
@@ -194,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--gamma', type=float, default=1)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--manual_md', type=bool, default=False, help='Manually input missing data')
@@ -207,14 +197,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dir_path = get_dir_path(args)
-    pipeline_obj = get_pipeline_obj(args, dir_path)
+    pipeline_obj = get_pipeline_obj(args, 0)
     subgroups = pipeline_obj.lattice_graph.x_dict.keys()
     results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
                                 for seed in range(1, args.seeds_num + 1)} for comb_size in args.comb_size_list}
 
     for seed in range(1, args.seeds_num + 1):
         set_seed(seed)
-        # if not args.load_model or pipeline_obj.model_not_found(seed):
+        pipeline_obj = get_pipeline_obj(args, seed)
+        subgroups = pipeline_obj.lattice_graph.x_dict.keys()
         print(f"Seed: {seed}\n=============================")
         pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:
