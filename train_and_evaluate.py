@@ -21,6 +21,7 @@ class PipelineManager:
     def __init__(self, args, seed, missing_indices_dict=None):
         self.args = args
         self.seed = seed
+        self.seed = 1
         self.config_idx = int(args.config)
         self.epochs = args.epochs
         self.at_k = args.at_k if isinstance(args.at_k, list) else [args.at_k]
@@ -32,6 +33,7 @@ class PipelineManager:
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.missing_indices_dict = self._get_missing_data_dict(missing_indices_dict)
+        exit()
         self.non_missing_dict = self._get_non_missing_dict()
         self.train_idxs_dict, self.valid_idxs_dict = self._train_validation_split()
         self.test_idxs_dict = self._get_test_indices()
@@ -54,7 +56,7 @@ class PipelineManager:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.seed,
                                                       self.args.missing_prob, self.restricted_graph_idxs_mapping,
                                                       self.args.manual_md).missing_indices_dict
-            with open(f"{self.dir_path}missing_data_indices_seed{self.seed}.pkl", 'wb') as f:
+            with open(f"{self.dir_path}missing={self.args.missing_prob}_data_indices_seed{self.seed}.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
 
