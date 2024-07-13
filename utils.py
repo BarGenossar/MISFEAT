@@ -9,32 +9,6 @@ from config import Evaluation
 from sklearn.metrics import ndcg_score
 
 
-def Kendall_tau(rank_true: t.List[int], rank_pred: t.List[int]) -> int:
-    r"""
-    Compute Kendall tau score: count the number of inversions between two ranked lists
-    Arguments:
-        `rank_true`: ground truth rank
-        `rank_pred`: predicted rank
-        `descending`: rank in descending order, or vice versa
-    Return:
-        Kendall tau score (int)
-    Example:
-        truth = [A, B, C, D]
-        pred  = [C, A, B, D]
-        inversions: BC - CB, AC - CA --> output = 2
-    """
-    n = len(rank_true)
-
-    pred_to_idx = {rank: idx for idx, rank in enumerate(rank_pred)}
-
-    ## iterate each pair and count inversions
-    inversions = 0
-    for i in range(n-1):
-        for j in range(i+1, n):
-            if pred_to_idx[rank_true[i]] > pred_to_idx[rank_true[j]]: inversions += 1
-    return inversions
-
-
 def convert_binary_to_decimal(binary):
     return int(binary, 2)
 
@@ -75,9 +49,9 @@ def get_lattice_nodes_num(feature_num, min_level, max_level):
     return sum([math.comb(feature_num, i) for i in range(min_level, max_level + 1)])
 
 
-def get_restricted_graph_idxs_mapping(feature_num=None, min_m=None, max_m=None):
+def get_restricted_graph_idxs_mapping(feature_num, min_level, max_level):
     binary_vecs = [convert_decimal_to_binary(i + 1, feature_num) for i in range(2 ** feature_num - 1)]
-    rel_nid = [i for i, binary_vec in enumerate(binary_vecs) if min_m <= binary_vec.count('1') <= max_m]
+    rel_nid = [i for i, binary_vec in enumerate(binary_vecs) if min_level <= binary_vec.count('1') <= max_level]
     return {orig_nid: new_nid for new_nid, orig_nid in enumerate(rel_nid)}
 
 
@@ -143,27 +117,25 @@ def get_sorted_indices(score_tensor, comb_size_indices):
     return [idx.item() for idx in sorted_indices if idx.item() in comb_size_indices]
 
 
-def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_gt, sorted_list_idx_pred, results):
-    cands_num = len(sorted_list_idx_gt)
-    relevance = [0 for _ in range(len(ground_truth))]
-    for i in range(cands_num):
-        relevance[sorted_list_idx_gt[i]] = cands_num - i
-    DCG, IDCG = 0, 0
+def compute_ndcg(ground_truth, predictions, k, sorted_list_idx_true, sorted_list_idx_pred, results):
+    relevance = [0] * len(ground_truth)
+    for i in range(k): relevance[sorted_list_idx_true[i]] = 1
+    DCG = 0.
+    IDCG = 0.
     for i in range(k):
-        IDCG += relevance[sorted_list_idx_gt[i]] / math.log(i + 2, 2)
-        try:
-            DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
-        except IndexError:
-            print(f"i={i}, k={k}, len(sorted_list_idx_pred)={len(sorted_list_idx_pred)}\n"
-                  f"sorted_list_idx_pred={sorted_list_idx_pred}")
+        IDCG += 1 / math.log(i + 2, 2)
+        DCG += relevance[sorted_list_idx_pred[i]] / math.log(i + 2, 2)
     results['NDCG'][k] = round(DCG / IDCG, 4)
     return results
+
 
 def get_dir_path(args):
     if args.data_name == 'synthetic':
         return f"GeneratedData/Formula{args.formula}/Config{args.config}/"
     else:
         return f"RealWorldData/{args.data_name}/"
+
+
 
 
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
@@ -195,7 +167,22 @@ def save_results(test_results, dir_path, args):
     for comb_size in args.comb_size_list:
         results_path = dir_path + (f'combSize={comb_size}_samplingRatio={args.sampling_ratio}_'
                                    f'missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_'
-                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_model={args.model}.pkl')
+                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_gamma={args.gamma}_lr={args.lr}_'
+                                   f'hidden_channels={args.hidden_channels}_num_layers={args.num_layers}_'
+                                   f'model={args.model}.pkl')
+        final_test_results = comp_ave_results(test_results[comb_size])
+        with open(results_path, 'wb') as f:
+            pickle.dump(final_test_results, f)
+    save_hyperparams(dir_path, args)
+    return
+
+
+def save_results_baseline(test_results, dir_path, args):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    for comb_size in args.comb_size_list:
+        results_path = dir_path + (f'combSize={comb_size}_missingRatio={args.missing_prob}_'
+                                   f'imputation_method={args.imputation_method}.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)

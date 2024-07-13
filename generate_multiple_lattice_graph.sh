@@ -1,7 +1,7 @@
 #!/bin/zsh
 
-formulas=(1 2 3 4 5);
-configs=(1 2 3 4);
+formulas=(1 2 3);
+configs=(5 6);
 edge_sampling_ratio_list=(0.5)
 
 # Check if the dataset names are provided as command-line arguments

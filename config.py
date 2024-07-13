@@ -3,7 +3,7 @@ class LatticeGeneration:
     formula_idx = 1
     hyperparams_idx = 1
     min_m = 3
-    max_m = 5
+    max_m = 3
     within_level_edges = False
     is_hetero = False
     with_edge_attrs = False
@@ -28,22 +28,22 @@ class GNN:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 300
-    epochs_stable_val = 5
+    epochs = 1000
+    epochs_stable_val = 50
 
 
 class MLP:
     hidden_channels = 64
     num_layers = 2
     p_dropout = 0
-    epochs = 300
-    epochs_stable_val = 5
+    epochs = 50000
+    epochs_stable_val = 1000
     MLP_results_dir = 'MLP_results/'
 
 
 class Evaluation:
-    at_k = [3, 5, 10]
-    comb_size_list = [3, 4, 5]
+    at_k = [5, 10]
+    comb_size_list = [3]
     eval_metrics = ['NDCG', 'PREC']
-    formula_idx_list = [1, 2, 3, 4, 5]
+    formula_idx_list = [1, 2, 3]
     config_idx_list = [1, 2, 3, 4]

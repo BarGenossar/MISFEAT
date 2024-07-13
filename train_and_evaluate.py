@@ -6,7 +6,6 @@ from missing_data_masking import MissingDataMasking
 from sampler import NodeSampler
 from utils import *
 from torch_geometric.nn import to_hetero
-from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,7 +53,7 @@ class PipelineManager:
             missing_indices_dict = MissingDataMasking(self.feature_num, self.subgroups, self.seed,
                                                       self.args.missing_prob, self.restricted_graph_idxs_mapping,
                                                       self.args.manual_md).missing_indices_dict
-            with open(f"{self.dir_path}missing_data_indices_seed{self.seed}.pkl", 'wb') as f:
+            with open(f"{self.dir_path}missing={self.args.missing_prob}_data_indices_seed{self.seed}.pkl", 'wb') as f:
                 pickle.dump(missing_indices_dict, f)
             return missing_indices_dict
 
@@ -150,8 +149,8 @@ class PipelineManager:
                 if no_impr_counter == epochs_stable_val:
                     break
                 loss_value = self._run_training_epoch(train_indices, model, subgroup, optimizer, criterion)
-                if epoch == 1 or epoch % 5 == 0:
-                    # (f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
+                if epoch == 1 or epoch % 50 == 0:
+                    print(f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
                     if not self.args.save_model:
                         continue
                     best_val, no_impr_counter = self._run_over_validation(validation_indices, model, subgroup,
@@ -192,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument('--edge_sampling_ratio', type=float, default=LatticeGeneration.edge_sampling_ratio)
     parser.add_argument('--load_model', type=bool, default=False)
     parser.add_argument('--save_model', type=bool, default=True)
-    parser.add_argument('--data_name', type=str, default='mobile', help='options:{synthetic, loan, startup, mobile}')
+    parser.add_argument('--data_name', type=str, default='loan', help='options:{synthetic, loan, startup, mobile}')
     parser.add_argument('--missing_prob', type=float, default=MissingDataConfig.missing_prob)
     args = parser.parse_args()
 
@@ -205,7 +204,6 @@ if __name__ == "__main__":
     for seed in range(1, args.seeds_num + 1):
         set_seed(seed)
         pipeline_obj = get_pipeline_obj(args, seed)
-        subgroups = pipeline_obj.lattice_graph.x_dict.keys()
         print(f"Seed: {seed}\n=============================")
         pipeline_obj.train_model(seed)
         for comb_size in args.comb_size_list:

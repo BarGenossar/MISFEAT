@@ -30,7 +30,6 @@ class MissingDataMasking:
         for subgroup in self.subgroups:
             print(f"Enter the missing feature indexes for subgroup {subgroup} separated by commas:")
             missing_features = input().split(',')
-            # if the input is empty, skip
             if missing_features == ['']:
                 continue
             for fid in missing_features:
@@ -39,7 +38,7 @@ class MissingDataMasking:
         return missing_indices_dict
 
     def _get_random_missing_indices_dict(self, missing_indices_dict, binary_vecs):
-        counts = {fid: 0 for fid in range(self.feature_num)}    ## count to ensure a feature is not missing across all subgroups
+        counts = {fid: 0 for fid in range(self.feature_num)}
         for subgroup in self.subgroups:
             for fid in range(self.feature_num):
                 if len(missing_indices_dict[subgroup]) > self.max_missing_ratio * self.feature_num:

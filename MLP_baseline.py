@@ -16,7 +16,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class MLPModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, p_dropout):
         super(MLPModel, self).__init__()
-        self.relu = nn.ReLU()
         self.p_dropout = p_dropout
         self.num_layers = num_layers
         self._set_layers(input_size, hidden_size)
@@ -33,7 +32,7 @@ class MLPModel(nn.Module):
     def forward(self, x):
         for layer_idx in range(1, self.num_layers + 1):
             fc = getattr(self, f'fc{layer_idx}')
-            x = self.relu(fc(x))
+            x = F.leaky_relu(fc(x))
             x = F.dropout(x, p=self.p_dropout, training=self.training)
         output = self.out(x).squeeze()
         return output
@@ -48,6 +47,7 @@ def get_input_vectors(indices, feature_num):
     return torch.tensor(x_input, dtype=torch.float32).to(device)
 
 
+
 def train_mlp_model(pipeline_obj, subgroups, args):
     torch.manual_seed(seed)
     criterion = torch.nn.MSELoss()
@@ -55,10 +55,9 @@ def train_mlp_model(pipeline_obj, subgroups, args):
     lattice_graph.to(device)
     dir_path = pipeline_obj.dir_path
     feature_num = pipeline_obj.feature_num
-    input_size = feature_num
     for subgroup in subgroups:
         print(f"\nTraining on subgroup {subgroup}...")
-        model = MLPModel(input_size, args.hidden_channels, args.num_layers, args.p_dropout).to(device)
+        model = MLPModel(feature_num, args.hidden_channels, args.num_layers, args.p_dropout).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         train_indices = pipeline_obj.train_idxs_dict[subgroup]
         valid_indices = pipeline_obj.valid_idxs_dict[subgroup]
@@ -72,11 +71,12 @@ def train_mlp_model(pipeline_obj, subgroups, args):
                 break
             loss_value = run_training_epoch(train_indices, x_train, model, subgroup, optimizer, criterion, lattice_graph)
             if epoch == 1 or epoch % 5 == 0:
-                # print(f'Epoch: {epoch}, Loss: {round(loss_value, 4)}')
+                print(f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
                 if not args.save_model:
                     continue
-                best_val, no_impr_counter = run_over_validation(lattice_graph, valid_indices, x_valid, model, subgroup,
-                                                                criterion, best_val, no_impr_counter, seed, dir_path)
+                best_val, no_impr_counter = run_over_validation(lattice_graph, valid_indices, x_valid,
+                                                                model, subgroup, criterion, best_val, no_impr_counter,
+                                                                seed, dir_path)
     return
 
 
@@ -137,7 +137,8 @@ def save_results_MLPModel(test_results, dir_path, comb_size_list, args):
     for comb_size in comb_size_list:
         results_path = dir_path + (f'combSize={comb_size}_samplingRatio={args.sampling_ratio}_'
                                    f'missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_'
-                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_model=MLP.pkl')
+                                   f'edgeSamplingRatio={args.edge_sampling_ratio}_gamma={args.gamma}_'
+                                   f'lr={args.lr}_model=MLP.pkl')
         final_test_results = comp_ave_results(test_results[comb_size])
         with open(results_path, 'wb') as f:
             pickle.dump(final_test_results, f)
@@ -171,8 +172,9 @@ if __name__ == "__main__":
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
-    parser.add_argument('--lr', type=float, default=0.01)
-    parser.add_argument('--weight_decay', type=float, default=5e-4)
+    parser.add_argument('--lr', type=float, default=2e-5)
+    parser.add_argument('--gamma', type=float, default=1)
+    parser.add_argument('--weight_decay', type=float, default=5e-3)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
@@ -187,13 +189,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     seeds_num = args.seeds_num
     dir_path = get_dir_path(args)
-    pipeline_obj = get_pipeline_obj(args, dir_path)
+    pipeline_obj = get_pipeline_obj(args, 0)
     subgroups = pipeline_obj.lattice_graph.x_dict.keys()
     results_dict = {comb_size: {seed: {subgroup: dict() for subgroup in subgroups}
                                 for seed in range(1, seeds_num + 1)} for comb_size in args.comb_size_list}
 
     for seed in range(1, seeds_num + 1):
         set_seed(seed)
+        pipeline_obj = get_pipeline_obj(args, seed)
         if not args.load_mlp_model or pipeline_obj.model_not_found(seed):
             print(f"Seed: {seed}\n=============================")
             train_mlp_model(pipeline_obj, subgroups, args)

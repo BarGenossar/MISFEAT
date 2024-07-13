@@ -16,6 +16,7 @@ class CustomKNNImputer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Impute missing values using the most frequent value
         self.imputer = SimpleImputer(strategy='most_frequent')
+        X.columns = X.columns.astype(str)
         self.data_encoded = pd.DataFrame(self.imputer.fit_transform(X), columns=X.columns)
         
         # Build NearestNeighbors using the Hamming distance

@@ -1,5 +1,10 @@
 
-# Experimental Instructions for a Single Dataset
+# Subgroup Feature Selection with HGNNs
+The entire experimental pipeline consists of the following steps:
+1. Raw Data Preparation (for the synthetic datasets)
+2. Conversion of the Raw Data to the Feature Lattice Graph, including MI calculations
+3. Training and Evaluation of the HGNN, applied over the lattice graph
+
 ## Raw Data Preparation
 1. The raw data should be saved as a pandas dataframe object in a pkl file.
 2. The dataframe should have the following columns:
