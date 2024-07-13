@@ -18,29 +18,29 @@ warnings.filterwarnings('ignore')
 
 
 class FeatureLatticeGraph:
-    def __init__(self, dataset_path, args, df=None, create_edge=True):
+    def __init__(self, dataset_path, args, df=None, create_edges=True, baseline=None):
         self.with_edge_attrs = args.with_edge_attrs
         self.tqdm = args.print_tqdm
-        if df is not None:
-            self.dataset = df
-        else:
-            self.dataset = self._read_dataset(dataset_path)
+        self.create_edges = create_edges
+        self.baseline = baseline
+        self.dataset = self._read_dataset(dataset_path, df)
         self.feature_num = self.dataset.shape[1] - 2
         self.min_level = get_min_level(args.min_m, args.num_layers)
         self.max_level = get_max_level(args.max_m, args.num_layers, self.feature_num)
         self.edge_sampling_ratio = args.edge_sampling_ratio
         self.subgroups_num = self.dataset['subgroup'].nunique()
-        self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count() - 4))
+        self.cores_to_use = min(self.subgroups_num, int(multiprocessing.cpu_count()))
         self.restricted_graph_idxs_mapping = get_restricted_graph_idxs_mapping(self.feature_num, self.min_level,
                                                                                self.max_level)
         self.mappings_dict = self._create_mappings_dict()
-        if create_edge:
-            self.graph = self._create_multiple_feature_lattice()
-            self.save(dataset_path)
+        self.graph = self._create_multiple_feature_lattice()
+        self.save(dataset_path)
 
     @staticmethod
-    def _read_dataset(dataset_path):
-        return pd.read_pickle(dataset_path)
+    def _read_dataset(dataset_path, df):
+        if df is None:
+            df = pd.read_pickle(dataset_path)
+        return df
 
     def _create_mappings_dict(self):
         print(f"Generating the mappings dictionary...\n =====================================\n")
@@ -72,7 +72,8 @@ class FeatureLatticeGraph:
     def _create_comb_size_mappings_dict(self, gid, mappings_dict, comb_size, dataframe, y_series, prev_tmp_dict):
         mappings_dict[gid][comb_size] = defaultdict(dict)
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
-        rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
         for comb in tqdm.tqdm(feature_set_combs) if self.tqdm else feature_set_combs:
@@ -108,7 +109,8 @@ class FeatureLatticeGraph:
         mappings_dict = {gid: {1: defaultdict(dict)}}
         prev_tmp_dict = dict()
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_level))
-        rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
+        rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
         for comb in feature_set_combs:
@@ -142,11 +144,11 @@ class FeatureLatticeGraph:
         print(f"Getting the node features and labels...\n ------------------\n")
         lattice_nodes_num = get_lattice_nodes_num(self.feature_num, self.min_level, self.max_level)
         with multiprocessing.Pool(processes=self.cores_to_use) as pool:
-            gid_nodes_dict_list = list(pool.imap(partial(self._get_gid_nodes, lattice_nodes_num=lattice_nodes_num),
+            gid_nodes_dict_list = list(pool.imap(partial(self._get_gid_nodes),
                                                  range(self.subgroups_num)))
         return self._convert_gid_nodes_to_data(gid_nodes_dict_list, data)
 
-    def _get_gid_nodes(self, gid, lattice_nodes_num):
+    def _get_gid_nodes(self, gid):
         x_tensor = torch.zeros(len(self.restricted_graph_idxs_mapping), self.feature_num, dtype=torch.float)
         y_tensor = torch.zeros(len(self.restricted_graph_idxs_mapping), dtype=torch.float)
         for comb_size in range(self.min_level, self.max_level + 1):
@@ -167,6 +169,8 @@ class FeatureLatticeGraph:
         return data
 
     def _get_edge_index(self, data):
+        if not self.create_edges:
+            return data
         data = self._get_intra_lattice_edges(data)
         data = self._get_inter_lattice_edges(data)
         return data
@@ -219,8 +223,10 @@ class FeatureLatticeGraph:
             for comb, comb_info in comb_size_mapping.items():
                 node_id = comb_info['restricted_node_id']
                 comb_set = set(comb)
-                for next_comb, next_comb_info in comb_size_mapping.items():
-                    if np.random.rand() > self.edge_sampling_ratio:
+                # Pre-generate random numbers
+                random_numbers = np.random.rand(len(comb_size_mapping))
+                for idx, (next_comb, next_comb_info) in enumerate(comb_size_mapping.items()):
+                    if random_numbers[idx] > self.edge_sampling_ratio:
                         continue
                     if len(comb_set.intersection(set(next_comb))) == comb_size - 1:
                         if (next_comb, comb) in edge_set:
@@ -258,9 +264,13 @@ class FeatureLatticeGraph:
             return data
 
     def save(self, dataset_path) -> None:
-        graph_path = dataset_path.replace('.pkl', f'_hetero_graph_edgeSamplingRatio={self.edge_sampling_ratio}.pt')
+        if self.baseline is not None:
+            graph_path = dataset_path.replace('.pkl', f'{self.baseline}_lattice.pt')
+        else:
+            graph_path = dataset_path.replace('.pkl', f'_hetero_graph_edgeSamplingRatio={self.edge_sampling_ratio}.pt')
         torch.save(self.graph, graph_path)
         print(f"The lattice graph was saved at {graph_path}")
+
 
 
 if __name__ == "__main__":
@@ -277,15 +287,13 @@ if __name__ == "__main__":
     # parser.add_argument('--hetero', type=bool, default=LatticeGeneration.is_hetero, help='create heterogeneous graph')
     parser.add_argument('--with_edge_attrs', type=bool, default=LatticeGeneration.with_edge_attrs,
                         help='add attributes to the edges')
-    parser.add_argument('--data_name', type=str, default='synthetic',
+    parser.add_argument('--data_name', type=str, default='loan',
                         help='name of dataset, options: {synthetic, loan, startup, mobile}')
-    parser.add_argument('--print_tqdm', type=bool, default=True, help='whether to leave tqdm progress bars')
+    parser.add_argument('--print_tqdm', type=bool, default=False, help='whether to leave tqdm progress bars')
     args = parser.parse_args()
 
-    if args.data_name == 'synthetic':
-        dataset_path = f"GeneratedData/Formula{args.formula}/Config{args.config}/dataset.pkl"
-    else:
-        dataset_path = f"RealWorldData/{args.data_name}/dataset.pkl"
+    dir_path = get_dir_path(args)
+    dataset_path = f"{dir_path}/dataset.pkl"
 
     start = time.time()
     lattice = FeatureLatticeGraph(dataset_path, args)

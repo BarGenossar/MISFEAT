@@ -209,4 +209,3 @@ if __name__ == "__main__":
         for comb_size in args.comb_size_list:
             results_dict[comb_size][seed] = {g_id: pipeline_obj.test_subgroup(g_id, comb_size) for g_id in subgroups}
     save_results(results_dict, pipeline_obj.dir_path, args)
-
