@@ -72,7 +72,6 @@ class FeatureLatticeGraph:
     def _create_comb_size_mappings_dict(self, gid, mappings_dict, comb_size, dataframe, y_series, prev_tmp_dict):
         mappings_dict[gid][comb_size] = defaultdict(dict)
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, comb_size))
-        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
         rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []
@@ -109,7 +108,6 @@ class FeatureLatticeGraph:
         mappings_dict = {gid: {1: defaultdict(dict)}}
         prev_tmp_dict = dict()
         feature_set_combs = list(combinations(dataframe.drop(['y', 'subgroup'], axis=1).columns, self.min_level))
-        # rel_idxs = dataframe[dataframe['subgroup'] == str(gid)].index
         rel_idxs = dataframe[dataframe['subgroup'].apply(lambda x: int(float(x))) == gid].index
         y_series = y_series[rel_idxs]
         comb_property_list = []

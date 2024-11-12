@@ -135,9 +135,6 @@ def get_dir_path(args):
     else:
         return f"RealWorldData/{args.data_name}/"
 
-
-
-
 def compute_precision(ground_truth, predictions, k, sorted_gt_indices, sorted_pred_indices, results):
     precision = len(set.intersection(set(sorted_gt_indices[:k]), set(sorted_pred_indices[:k])))
     results['PREC'][k] = round(precision / k, 4)
