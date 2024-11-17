@@ -80,7 +80,9 @@ def compute_eval_metrics(ground_truth, preds, test_indices, at_k, comb_size, fea
     g_results = {metric: dict() for metric in eval_metrics}
     for metric in eval_metrics:
         for k in at_k:
-            g_results = eval_func[metric](ground_truth, preds, k, sorted_gt_indices, sorted_pred_indices, g_results)
+            g_results = eval_func[metric](ground_truth, preds,
+                                          k, sorted_gt_indices,
+                                          sorted_pred_indices, g_results)
     return g_results
 
 
