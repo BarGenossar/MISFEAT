@@ -8,7 +8,7 @@ missing_prob_list=(0.2)
 edge_sampling_ratio_list=(0.5)
 hidden_channels_list=(64)
 sampling_method_list=('randwalk')
-model_list=('SAGE')
+model_list=('MLP')
 
 if [ $# -eq 0 ]; then
     echo "Please Insert Dataset Names as Command Line Arguments"
