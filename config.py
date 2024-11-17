@@ -46,4 +46,4 @@ class Evaluation:
     comb_size_list = [3]
     eval_metrics = ['NDCG', 'PREC']
     formula_idx_list = [1, 2, 3]
-    config_idx_list = [1, 2, 3, 4]
+    config_idx_list = [1, 3]

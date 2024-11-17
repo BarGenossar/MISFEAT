@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 formulas=(1 2 3)
-configs=(1 2 3 4)
+configs=(1 3)
 sampling_ratio_list=(1.0)
 missing_prob_list=(0.2)
 edge_sampling_ratio_list=(0.5)
