@@ -1,9 +1,9 @@
 #!/bin/zsh
 
 formulas=(1 2 3)
-configs=(1 2 3 4)
+configs=(3 1)
 missing_prob_list=(0.2)
-baseline_method_list=('KNN' 'mode')
+baseline_method_list=('KNN')
 
 
 # Check if the dataset names are provided as command-line arguments
