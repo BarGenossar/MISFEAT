@@ -25,9 +25,9 @@ class Sampling:
 
 class GNN:
     gnn_model = 'SAGE'  # ['SAGE', 'SAGE_HEAD']
-    hidden_channels = 64
+    hidden_channels = 128
     num_layers = 2
-    p_dropout = 0
+    p_dropout = 0.1
     epochs = 1000
     epochs_stable_val = 50
 
@@ -35,9 +35,9 @@ class GNN:
 class MLP:
     hidden_channels = 64
     num_layers = 2
-    p_dropout = 0
-    epochs = 50000
-    epochs_stable_val = 1000
+    p_dropout = 0.1
+    epochs = 20000
+    epochs_stable_val = 500
     MLP_results_dir = 'MLP_results/'
 
 
