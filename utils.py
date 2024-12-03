@@ -51,8 +51,8 @@ def get_lattice_nodes_num(feature_num, min_level, max_level):
 
 def get_restricted_graph_idxs_mapping(feature_num, min_level, max_level):
     binary_vecs = [convert_decimal_to_binary(i + 1, feature_num) for i in range(2 ** feature_num - 1)]
-    rel_nid = [i for i, binary_vec in enumerate(binary_vecs) if min_level <= binary_vec.count('1') <= max_level]
-    return {orig_nid: new_nid for new_nid, orig_nid in enumerate(rel_nid)}
+    rel_nids = [i for i, binary_vec in enumerate(binary_vecs) if min_level <= binary_vec.count('1') <= max_level]
+    return {orig_nid: new_nid for new_nid, orig_nid in enumerate(rel_nids)}
 
 
 def get_lattice_edges_num(feature_num, max_subset_size, within_levels=True):
