@@ -14,28 +14,39 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class MLPModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, p_dropout):
+    def __init__(self, input_size, hidden_size, num_layers, p_dropout, activation="leaky_relu"):
         super(MLPModel, self).__init__()
-        self.p_dropout = p_dropout
-        self.num_layers = num_layers
-        self._set_layers(input_size, hidden_size)
-        self.out = Linear(hidden_size, 1)
 
-    def _set_layers(self, input_size, hidden_size):
-        for layer_idx in range(1, self.num_layers + 1):
-            if layer_idx == 1:
-                setattr(self, f'fc{layer_idx}', Linear(input_size, hidden_size))
-            else:
-                setattr(self, f'fc{layer_idx}', Linear(hidden_size, hidden_size))
-        return
+        layers = []
+        current_size = hidden_size
+
+        layers.append(nn.Linear(input_size, current_size))
+        layers.append(self._get_activation(activation))
+        layers.append(nn.BatchNorm1d(current_size))
+        layers.append(nn.Dropout(p=p_dropout))
+
+        for _ in range(1, num_layers):
+            next_size = max(1, current_size // 2)  # Ensure size doesn't go below 1
+            layers.append(nn.Linear(current_size, next_size))
+            layers.append(self._get_activation(activation))
+            layers.append(nn.BatchNorm1d(next_size))
+            layers.append(nn.Dropout(p=p_dropout))
+            current_size = next_size
+        self.model = nn.Sequential(*layers)
+        self.out = nn.Linear(current_size, 1)
 
     def forward(self, x):
-        for layer_idx in range(1, self.num_layers + 1):
-            fc = getattr(self, f'fc{layer_idx}')
-            x = F.leaky_relu(fc(x))
-            x = F.dropout(x, p=self.p_dropout, training=self.training)
+        x = self.model(x)
         output = self.out(x).squeeze()
         return output
+
+    def _get_activation(self, activation):
+        activations = {
+            "relu": nn.ReLU(),
+            "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
+            "gelu": nn.GELU()
+        }
+        return activations.get(activation, nn.ReLU())
 
 
 def get_input_vectors(indices, feature_num):
@@ -45,7 +56,6 @@ def get_input_vectors(indices, feature_num):
         binary_vec = [int(digit) for digit in binary_vec]
         x_input.append(binary_vec)
     return torch.tensor(x_input, dtype=torch.float32).to(device)
-
 
 
 def train_mlp_model(pipeline_obj, subgroups, args):
@@ -58,7 +68,7 @@ def train_mlp_model(pipeline_obj, subgroups, args):
     for subgroup in subgroups:
         print(f"\nTraining on subgroup {subgroup}...")
         model = MLPModel(feature_num, args.hidden_channels, args.num_layers, args.p_dropout).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         train_indices = pipeline_obj.train_idxs_dict[subgroup]
         valid_indices = pipeline_obj.valid_idxs_dict[subgroup]
         x_train = get_input_vectors(train_indices, feature_num)
@@ -70,7 +80,7 @@ def train_mlp_model(pipeline_obj, subgroups, args):
             if no_impr_counter == epochs_stable_val:
                 break
             loss_value = run_training_epoch(train_indices, x_train, model, subgroup, optimizer, criterion, lattice_graph)
-            if epoch == 1 or epoch % 5 == 0:
+            if epoch == 1 or epoch % 500 == 0:
                 print(f'Epoch: {epoch}, Train Loss: {round(loss_value, 4)}, Best Val: {round(best_val, 4)}')
                 if not args.save_model:
                     continue
@@ -172,9 +182,9 @@ if __name__ == "__main__":
     default_at_k = ','.join([str(i) for i in Evaluation.at_k])
     parser.add_argument('--at_k', type=lambda x: [int(i) for i in x.split(',')], default=default_at_k)
     parser.add_argument('--comb_size_list', type=int, default=Evaluation.comb_size_list)
-    parser.add_argument('--lr', type=float, default=2e-5)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--gamma', type=float, default=1)
-    parser.add_argument('--weight_decay', type=float, default=5e-3)
+    parser.add_argument('--weight_decay', type=float, default=1e-3)
     parser.add_argument('--display', type=bool, default=False)
     parser.add_argument('--min_m', type=int, default=LatticeGeneration.min_m, help='min size of feature combinations')
     parser.add_argument('--max_m', type=int, default=LatticeGeneration.max_m, help='max size of feature combinations')
