@@ -6,6 +6,8 @@ configs=(1 3)
 sampling_ratio_list=(1.0)
 missing_prob_list=(0.2)
 edge_sampling_ratio_list=(0.5)
+num_layers_list=(2 3)
+hidden_channels_list=(16 32 64 128)
 sampling_method_list=('randwalk')
 
 # Check if GPU number argument is provided
@@ -25,7 +27,7 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 dataset_name_list=("$@")
-# dataset_name_list=("synthetic" "loan" "startup" "mobile")
+# dataset_name_list=("synthetic" "attrition" "mobile" "loan")
 
 
 for dataset_name in "${dataset_name_list[@]}"; do
@@ -33,24 +35,33 @@ for dataset_name in "${dataset_name_list[@]}"; do
     for sampling_method in "${sampling_method_list[@]}"; do
       for edge_sampling_ratio in "${edge_sampling_ratio_list[@]}"; do
         for sampling_ratio in "${sampling_ratio_list[@]}"; do
-          if [ $dataset_name != "synthetic" ]; then
-              echo "Running on dataset $dataset_name, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio"
+          for num_layers in "${num_layers_list[@]}"; do
+            for hidden_channels in "${hidden_channels_list[@]}"; do
+              if [ $dataset_name != "synthetic" ]; then
+                  echo "Running on dataset $dataset_name, sampling_ratio $sampling_ratio, missing_prob $missing_prob," \
+                   edge_sampling_ratio $edge_sampling_ratio", num_layers $num_layers, hidden_channels $hidden_channels"
 
-              python MLP_baseline.py --sampling_ratio $sampling_ratio --missing_prob $missing_prob \
-                    --edge_sampling_ratio $edge_sampling_ratio --data_name $dataset_name \
-                    --sampling_method $sampling_method
-              echo "***************************************************************************************"
-          else
-            for j in "${configs[@]}"; do
-              for i in "${formulas[@]}"; do
-                echo "Running on  config $j, formula $i, sampling_ratio $sampling_ratio, missing_prob $missing_prob, edge_sampling_ratio $edge_sampling_ratio"
-                python MLP_baseline.py --formula $i --config $j --sampling_ratio $sampling_ratio \
-                      --missing_prob $missing_prob --data_name $dataset_name --sampling_method $sampling_method \
-                      --edge_sampling_ratio $edge_sampling_ratio
-                echo "***************************************************************************************"
-              done
+                  python MLP_baseline.py --sampling_ratio $sampling_ratio --missing_prob $missing_prob \
+                        --edge_sampling_ratio $edge_sampling_ratio --data_name $dataset_name \
+                        --sampling_method $sampling_method
+                  echo "***************************************************************************************"
+              else
+                for j in "${configs[@]}"; do
+                  for i in "${formulas[@]}"; do
+                    echo "Running on  config $j, formula $i, sampling_ratio $sampling_ratio, missing_prob $missing_prob,"\
+                     "edge_sampling_ratio $edge_sampling_ratio, num_layers $num_layers, hidden_channels $hidden_channels"
+
+
+                    python MLP_baseline.py --formula $i --config $j --sampling_ratio $sampling_ratio \
+                          --missing_prob $missing_prob --data_name $dataset_name --sampling_method $sampling_method," \
+                          --edge_sampling_ratio $edge_sampling_ratio --num_layers $num_layers --hidden_channels $hidden_channels"
+                    echo "***************************************************************************************"
+
+                  done
+                done
+              fi
             done
-          fi
+          done
         done
       done
     done
