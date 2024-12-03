@@ -65,21 +65,21 @@ def get_curr_dir_path(args, formula_idx, config_idx):
 
 
 def get_pkl_path(args, curr_dir_path, comb_size):
-    if args.imputation_method is None:
-        if args.model != 'MLP':
-            return (f"{curr_dir_path}combSize={comb_size}_"
-                    f"samplingRatio={args.sampling_ratio}_missingRatio={args.missing_prob}_"
-                    f"samplingMethod={args.sampling_method}_edgeSamplingRatio={args.edge_sampling_ratio}_"
-                    f"gamma={args.gamma}_lr={args.lr}_hidden_channels={args.hidden_channels}_"
-                    f"num_layers={args.num_layers}_model={args.model}.pkl")
-        else:
-            return (f"{curr_dir_path}combSize={comb_size}_samplingRatio={args.sampling_ratio}_"
-                                   f"missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_"
-                                   f"edgeSamplingRatio={args.edge_sampling_ratio}_gamma={args.gamma}_"
-                                   f"lr={args.lr}_model=MLP.pkl")
-    else:
+    if args.model == "KNN":
         return (f"{curr_dir_path}combSize={comb_size}_"
-                f"missingRatio={args.missing_prob}_imputation_method={args.imputation_method}.pkl")
+                f"missingRatio={args.missing_prob}_imputation_method=KNN.pkl")
+    if args.model != 'MLP':
+        return (f"{curr_dir_path}combSize={comb_size}_"
+                f"samplingRatio={args.sampling_ratio}_missingRatio={args.missing_prob}_"
+                f"samplingMethod={args.sampling_method}_edgeSamplingRatio={args.edge_sampling_ratio}_"
+                f"gamma={args.gamma}_lr={args.lr}_hidden_channels={args.hidden_channels}_"
+                f"num_layers={args.num_layers}_model={args.model}.pkl")
+    else:
+        return (f"{curr_dir_path}combSize={comb_size}_samplingRatio={args.sampling_ratio}_"
+                               f"missingRatio={args.missing_prob}_samplingMethod={args.sampling_method}_"
+                               f"edgeSamplingRatio={args.edge_sampling_ratio}_gamma={args.gamma}_"
+                               f"lr={args.lr}_model=MLP.pkl")
+
 
 
 if __name__ == "__main__":
