@@ -1,11 +1,11 @@
 #!/bin/zsh
 
 formulas=(1 2 3)
-configs=(1 3)
+configs=(3 1)
 sampling_ratio_list=(1.0)
 missing_prob_list=(0.2)
 edge_sampling_ratio_list=(0.5)
-hidden_channels_list=(64)
+hidden_channels_list=(128)
 sampling_method_list=('randwalk')
 gnn_model_list=('SAGE')
 
@@ -26,7 +26,7 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 dataset_name_list=("$@")
-# dataset_name_list=("synthetic" "loan" "startup" "mobile")
+# dataset_name_list=("synthetic" "attrition" "mobile" "loan")
 
 for dataset_name in "${dataset_name_list[@]}"; do
   for model in "${gnn_model_list[@]}"; do
