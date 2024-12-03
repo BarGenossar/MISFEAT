@@ -48,21 +48,6 @@
         },
         "2": {
             "subgroups_num": 4,
-            "feature_num": 15,
-            "feature_range": [0, 1, 2, 3],
-            "redundant_num": 2,
-            "correlated_num": 2,
-            "correlated_min_probability": 0.55,
-            "correlated_max_probability": 0.6,
-            "redundant_min_subgroup": 3,
-            "redundant_max_subgroup": 5,
-            "redundant_flip_probability": 0.25,
-            "sample_size": 50000,
-            "random_noise_mean": 0.08,
-            "random_noise_std": 0.02
-        },
-        "3": {
-            "subgroups_num": 4,
             "feature_num": 20,
             "feature_range": [0, 1, 2, 3, 4],
             "redundant_num": 2,
@@ -74,6 +59,21 @@
             "redundant_flip_probability": 0.25,
             "sample_size": 50000,
             "random_noise_mean": -0.05,
+            "random_noise_std": 0.02
+        },
+        "3": {
+            "subgroups_num": 4,
+            "feature_num": 15,
+            "feature_range": [0, 1, 2, 3],
+            "redundant_num": 2,
+            "correlated_num": 2,
+            "correlated_min_probability": 0.55,
+            "correlated_max_probability": 0.6,
+            "redundant_min_subgroup": 3,
+            "redundant_max_subgroup": 5,
+            "redundant_flip_probability": 0.25,
+            "sample_size": 50000,
+            "random_noise_mean": 0.08,
             "random_noise_std": 0.02
         },
         "4": {
