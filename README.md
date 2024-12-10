@@ -1,4 +1,4 @@
-# Subgroup-Feature-Selection-with-HGNNs
+# MISFEAT: Feature Selection for Subgroups with Systematic Missing Data
 
 More detailed instructions and explanations will be uploaded soon.
 ********************************************************************************
