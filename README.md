@@ -1,7 +1,5 @@
 # MISFEAT: Feature Selection for Subgroups with Systematic Missing Data
 
-More detailed instructions and explanations will be uploaded soon.
-********************************************************************************
 # Experimental Instructions
 **1)** Generate the multiple lattice graph for each dataset:
 
